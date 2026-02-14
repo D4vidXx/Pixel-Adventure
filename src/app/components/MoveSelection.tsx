@@ -268,6 +268,7 @@ export const MOVESETS: Record<string, Move[]> = {
       baseDamage: 20,
       cost: 0,
       cooldown: 0,
+      icon: Swords,
     },
     {
       id: 'fortify',
