@@ -22,7 +22,7 @@ export const PATCH_NOTES: PatchNote[] = [
                         'All equipment base stats (except dodge chance) now break the stat cap.',
                         'Waving Cat no longer boosts speed.',
                         'Beer stats buff: +3 → +2, now also gives +2 to a random stat on crit.',
-                        '4-Leaf Clover heal nerfed: 10 HP → 6 HP.',
+                        '4-Leaf Clover heal nerfed: 10 HP → 4 HP.',
                         'Hardened Chest-Plate shield buff: 10 → 12.',
                         'Dozens of Eggs cap reduced: 5 → 4.',
                         'Magma Overlord defense increased: 220 → 320.',

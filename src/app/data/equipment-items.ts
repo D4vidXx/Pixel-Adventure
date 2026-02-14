@@ -10,7 +10,9 @@ export interface EquipmentItem {
         defense?: number;
         health?: number;
         speed?: number;
+        crit?: number;
     };
+    onCritGrantRandomStat?: number;
     unavailableClasses?: string[];
     ignoreStatCap?: boolean;
 }
@@ -30,7 +32,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         id: 'four_leaf_clover',
         name: '4-Leaf Clover',
         description: '+10 Speed',
-        passiveDescription: 'Heal 6 HP whenever you dodge an attack.',
+        passiveDescription: 'Heal 4 HP whenever you dodge an attack.',
         cost: 90,
         icon: '🍀',
         flatStats: { speed: 10 },
@@ -40,7 +42,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         id: 'ring_of_power',
         name: 'Ring of Power',
         description: '+20 Attack',
-        passiveDescription: 'Instantly kill any enemy below 5% of their max HP.',
+        passiveDescription: 'Instantly kill any enemy below 10% of their max HP. Every kill raise the threshold by 0.5%.',
         cost: 120,
         icon: '💍',
         flatStats: { attack: 20 },
@@ -50,9 +52,11 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         id: 'beer',
         name: 'Beer',
         description: '+5% Crit Chance',
-        passiveDescription: 'Gain +2 to a random stat (HP, Atk, Def, Spd) at start of every level. Also gain +2 to a random stat on crit.',
+        passiveDescription: 'Gain +3 to a random stat (HP, Atk, Def, Spd) at start of every level. Also gain +2 to a random stat on crit.',
         cost: 60,
         icon: '🍺',
+        flatStats: { crit: 5 },
+        onCritGrantRandomStat: 2,
         ignoreStatCap: true,
     },
     {
@@ -99,7 +103,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         id: 'movie_popcorn',
         name: 'Dozens of Eggs',
         description: 'No Base Stats',
-        passiveDescription: 'Increase Max HP by 1 every turn (Max 4/level). 5% chance for +20 HP & Max HP, but risks Salmonella (-20% HP).',
+        passiveDescription: 'Increase Max HP by 1 every turn (Max 4/level). 5% chance for +12 HP & Max HP, but risks Salmonella (-20% HP).',
         cost: 200,
         icon: '🥚',
     },

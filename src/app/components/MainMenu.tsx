@@ -307,7 +307,7 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
             transition={{ delay: 1.5, duration: 3, repeat: Infinity }}
             className="mt-6 text-cyan-100/80 text-[10px] tracking-[0.3em] sm:tracking-[0.5em] uppercase font-medium"
           >
-            v1.5.3 // Angry Marshmallow Group
+            v1.5.4 // Angry Marshmallow Group
           </motion.div>
         </motion.div>
 

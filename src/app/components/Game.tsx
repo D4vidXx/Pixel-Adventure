@@ -49,6 +49,45 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }, [equippedItems]);
 
   const hasEquipment = (itemId: string) => runEquippedItems.includes(itemId);
+
+  // Centralized Beer boost logic (after hasEquipment)
+  const maybeApplyBeerBoost = () => {
+    addLog(`[DEBUG] maybeApplyBeerBoost called. Beer equipped: ${hasEquipment('beer')}`);
+    if (!hasEquipment('beer')) return;
+    const equipmentBeer = getEquipmentItem('beer');
+    const amount = equipmentBeer?.onCritGrantRandomStat ?? 2;
+    const statRoll = Math.random();
+    if (statRoll < 0.25) {
+      if (hero.id === 'clyde') {
+        setPlayerDefense(prev => prev + amount);
+        addLog(`🍺 Beer boost! +${amount} Defense!`);
+      } else {
+        setPlayerAttack(prev => prev + amount);
+        addLog(`🍺 Beer boost! +${amount} Attack!`);
+      }
+    } else if (statRoll < 0.50) {
+      setPlayerDefense(prev => prev + amount);
+      addLog(`🍺 Beer boost! +${amount} Defense!`);
+    } else if (statRoll < 0.75) {
+      setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + amount }));
+      setPlayerHealth(prev => prev + amount);
+      addLog(`🍺 Beer boost! +${amount} Max HP!`);
+    } else {
+      setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + amount }));
+      setPlayerHealth(prev => prev + amount);
+      addLog(`🍺 Beer boost! +${amount} Max HP!`);
+    }
+  };
+  // Debug test hook: call `window.__forceBeerTest()` from browser console to force Beer proc
+  useEffect(() => {
+    (window as any).__forceBeerTest = () => {
+      addLog('[DEBUG] window.__forceBeerTest invoked');
+      maybeApplyBeerBoost();
+    };
+    return () => {
+      try { delete (window as any).__forceBeerTest; } catch (e) {}
+    };
+  }, [maybeApplyBeerBoost]);
   const startingGold = hasEquipment('chinese_waving_cat') ? 100 : 0;
   const [currentStage, setCurrentStage] = useState(1);
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -65,6 +104,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }, 0);
   const equipHealthBonus = runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.health || 0), 0);
   const equipSpeedBonus = runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.speed || 0), 0);
+  const equipCritBonus = runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.crit || 0), 0);
 
   const [permanentUpgrades, setPermanentUpgrades] = useState<{
     attackBonus: number;
@@ -757,32 +797,24 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   // Dice roll helpers
   const rollD20 = (isPlayer = false): number => {
     if (isPlayer) {
-      // Rogue class gets +20% crit chance (25% instead of 5%)
-      // Ancient Rune Stone (+10% -> +2 on d20)
-      // Beer (+5% -> +1 on d20)
       let critThreshold = 20;
       if (hasEquipment('ancient_rune_stone')) critThreshold -= 2;
-      if (hasEquipment('beer')) critThreshold -= 1;
       if (hasEquipment('sharp_razor')) critThreshold -= 4;
       if (hasEquipment('blood_vile')) critThreshold -= 1;
+      // Apply aggregated crit % from equipment (each 5% => -1 threshold)
+      const equipCritReduction = Math.floor(equipCritBonus / 5);
+      critThreshold -= equipCritReduction;
       critThreshold = Math.max(2, critThreshold);
 
-      // Rogue class gets +20% crit chance (crit on 17+)
-      if (hero.classId === 'rogue') {
-        const roll = Math.random() * 100;
-        const baseCritChance = 25; // Rogue base
-        const itemCritChance = (hasEquipment('ancient_rune_stone') ? 10 : 0) + (hasEquipment('beer') ? 5 : 0) + (hasEquipment('sharp_razor') ? 20 : 0) + (hasEquipment('blood_vile') ? 5 : 0);
-        return roll < (baseCritChance + itemCritChance) ? 20 : Math.floor(Math.random() * 19) + 1;
-      }
-
-      // Normal logic
       const roll = Math.floor(Math.random() * 20) + 1;
-      // If roll is high enough based on items
-      if (roll >= critThreshold) return 20;
+      if (roll >= critThreshold) {
+        // Player crit
+        return 20;
+      }
       return roll;
     } else {
-      // Enemy crits: always 5% (20 on d20)
-      return Math.floor(Math.random() * 20) + 1;
+      // Enemy can no longer crit naturally
+      return Math.floor(Math.random() * 19) + 1; // Never returns 20
     }
   };
 
@@ -792,12 +824,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   // Combat calculation helper
-  const calculateDamage = (baseDamage: number, attackStat: number, defenseStat: number): number => {
+  const calculateDamage = (baseDamage: number, attackStat: number, defenseStat: number, isEnemyAttack = false): number => {
     // For every point of attack: +0.1 damage
-    const attackBonus = attackStat * 0.1;
-    // For every point of defense: -0.1 damage taken
-    const defenseReduction = defenseStat * 0.1;
-
+    let attackBonus = attackStat * 0.1;
+    let defenseReduction = defenseStat * 0.1;
+    // If enemy is attacking, boost their damage and defense
+    if (isEnemyAttack) {
+      attackBonus *= 1.1; // 10% more damage
+      defenseReduction *= 1.3; // 30% more defense
+    }
     const baseDmg = baseDamage + attackBonus - defenseReduction;
     const variance = rollDamageVariance();
     const finalDamage = Math.max(1, Math.floor(baseDmg * variance));
@@ -941,12 +976,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const createMagmaSoldier = (id: string) => ({
     id,
     name: 'Magma Soldier',
-    type: 'ENEMY' as const,
-    maxHealth: 120,
+    type: 'MINION' as const,
+    maxHealth: 200,
     attack: 30,
     defense: 60,
     baseDamage: 50,
-    currentHealth: 120,
+    currentHealth: 200,
     shield: 0,
     weaknessTurns: 0,
     poisonTurns: 0,
@@ -1668,8 +1703,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               }
               addLog(`💨 You dodged ${enemy.name}'s attack!`);
               if (hasEquipment('four_leaf_clover')) {
-                setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 10));
-                addLog(`🍀 4-Leaf Clover restores 10 HP!`);
+                setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 4));
+                addLog(`🍀 4-Leaf Clover restores 4 HP!`);
               }
               if (index === aliveEnemies.length - 1) {
                 setTimeout(() => endEnemyTurn(), 500);
@@ -2043,14 +2078,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`🥚 Dozens of Eggs: +1 Max HP (${popcornEatenThisLevel + 1}/4).`);
         // Only allow Lucky Egg proc if still under cap
         if (Math.random() < 0.05) {
-          const boostedMaxHealth = maxPlayerHealth + 20;
+          const boostedMaxHealth = maxPlayerHealth + 12;
           const salmonellaLoss = Math.floor(boostedMaxHealth * 0.2);
-          setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 20 }));
+          setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 12 }));
           setPlayerHealth(prev => {
-            const afterBonus = Math.min(boostedMaxHealth, prev + 20);
+            const afterBonus = Math.min(boostedMaxHealth, prev + 12);
             return Math.max(1, afterBonus - salmonellaLoss);
           });
-          addLog(`🥚 Lucky Eggs! +20 Max HP, but Salmonella hits (-20% HP).`);
+          addLog(`🥚 Lucky Eggs! +12 Max HP, but Salmonella hits (-20% HP).`);
         }
       }
     }
@@ -2229,8 +2264,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`🎯 Deadshot: Guaranteed Critical!`);
         }
 
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const isCritical = critRoll === 20 || isGuaranteedCrit || localGuaranteedCrit;
+        if (isCritical) {
+          addLog('[DEBUG] Calling maybeApplyBeerBoost from Gunslinger crit handler');
+          maybeApplyBeerBoost();
+        }
         if (localGuaranteedCrit) {
           localGuaranteedCrit = false;
           if (guaranteedCritRef.current) {
@@ -2362,8 +2401,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`🎯 Deadshot: Guaranteed Critical!`);
         }
 
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const isCritical = critRoll === 20 || isGuaranteedCrit || localGuaranteedCrit;
+        if (isCritical) {
+          addLog('[DEBUG] Calling maybeApplyBeerBoost from Bullet Storm crit handler');
+          maybeApplyBeerBoost();
+        }
         if (localGuaranteedCrit) {
           localGuaranteedCrit = false;
           if (guaranteedCritRef.current) {
@@ -2545,7 +2588,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         const critThreshold = (hero.uniqueAbility?.id === 'last_chamber') ? 6 : 10;
         const isGuaranteedCrit = (localBulletsSpent % critThreshold) === 0;
 
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const isCritical = critRoll === 20 || isGuaranteedCrit || localGuaranteedCrit;
         if (localGuaranteedCrit) {
           localGuaranteedCrit = false;
@@ -3125,9 +3168,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               
               // Calculate final damage
               const baseDamage = Math.max(0, spaceCount);
-              const critRoll = rollD20();
+              const critRoll = rollD20(true);
               const isCritical = critRoll === 20;
               if (isCritical) {
+                addLog('[DEBUG] Calling maybeApplyBeerBoost from Outrage blast');
+                maybeApplyBeerBoost();
                 addLog(`⚡ CRITICAL OUTRAGE!`);
               }
 
@@ -3434,9 +3479,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       // Special handling for Weather Ball (Elara)
       if (move.id === 'weather_ball') {
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
         const isCritical = critRoll === 20 || darkPactCrit || consumeGuaranteedCrit();
+        if (isCritical) {
+          addLog('[DEBUG] Calling maybeApplyBeerBoost from Weather Ball crit handler');
+          maybeApplyBeerBoost();
+        }
         if (darkPactCrit) {
           addLog(`💀 Dark Pact activated! Guaranteed critical hit at 100 mana!`);
         }
@@ -3548,9 +3597,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         
         if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
         
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
         const isCritical = critRoll === 20 || darkPactCrit || consumeGuaranteedCrit();
+        if (isCritical) {
+          addLog('[DEBUG] Calling maybeApplyBeerBoost from Iron Cage crit handler');
+          maybeApplyBeerBoost();
+        }
         if (darkPactCrit) addLog(`💀 Dark Pact activated! Guaranteed critical hit!`);
         
         let damageAmount = move.baseDamage || 10;
@@ -3701,9 +3754,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       // Special handling for Whirlwind (AOE) or any isAOE move
       if (move.id === 'whirlwind' || move.isAOE) {
-        const critRoll = rollD20();
+        const critRoll = rollD20(true);
         const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
         const isCritical = critRoll === 20 || darkPactCrit || consumeGuaranteedCrit();
+        if (isCritical) {
+          addLog('[DEBUG] Calling maybeApplyBeerBoost from Whirlwind/AOE crit handler');
+          maybeApplyBeerBoost();
+        }
         if (darkPactCrit) {
           addLog(`💀 Dark Pact activated! Guaranteed critical hit at 100 mana!`);
         }
@@ -3940,12 +3997,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       // Target is already validated above, we can safely use it
       const target = enemies.find(e => e.id === effectiveTargetId)!;
 
-      const critRoll = rollD20();
+      const critRoll = rollD20(true);
       const isNaturalCrit = critRoll === 20;
+      if (isNaturalCrit) {
+        addLog('[DEBUG] Player natural crit detected in main attack flow');
+      }
       
       // Check for guaranteed critical hit conditions
       const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
       const isCritical = isNaturalCrit || guaranteedGunslingerCrit || darkPactCrit || consumeGuaranteedCrit();
+
+      if (isCritical) {
+        addLog('[DEBUG] Calling maybeApplyBeerBoost from main attack flow');
+        maybeApplyBeerBoost();
+      }
 
       if (darkPactCrit) {
         addLog(`💀 Dark Pact activated! Guaranteed critical hit at 100 mana!`);
@@ -4042,15 +4107,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         }
 
         // Passive: Dark Pact (Zephyr) - Critical hits restore 8 mana
-        if (hero.uniqueAbility?.id === 'dark_pact') {
-          setPlayerResource(prev => {
-            const newResource = Math.min(maxPlayerResource, prev + 8);
-            if (newResource !== prev) {
-              addLog(`💀 Dark Pact restores 8 ${resourceType}!`);
-            }
-            return newResource;
-          });
-        }
+        // Dark Pact no longer restores mana on crit
       }
 
 
@@ -5560,9 +5617,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   }
                   
                   const baseDamage = 65;
-                  const critRoll = rollD20();
+                  const critRoll = rollD20(true);
                   const isCritical = critRoll === 20;
                   if (isCritical) {
+                    addLog('[DEBUG] Calling maybeApplyBeerBoost from Outrage skip');
+                    maybeApplyBeerBoost();
                     addLog(`⚡ CRITICAL OUTRAGE!`);
                   }
 
@@ -5956,6 +6015,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                         >
                           <span className="text-base">{item.icon}</span>
                           {item.name}
+                          {item.id === 'movie_popcorn' && (
+                            <span className="ml-2 text-[10px] text-slate-400">({popcornEatenThisLevel}/4)</span>
+                          )}
                         </span>
                       );
                     })
