@@ -297,6 +297,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [outrageSpaceCount, setOutrageSpaceCount] = useState(0);
   const [outrageSkipped, setOutrageSkipped] = useState(false);
   const outrageLabelRef = useRef<{ handleSpaceKey: ((e: KeyboardEvent) => void) | null, handleMouseClick: (() => void) | null }>({ handleSpaceKey: null, handleMouseClick: null });
+  const outrageBlastTimeoutRef = useRef<number | null>(null);
   const [screenShakeIntensity, setScreenShakeIntensity] = useState(0);
   const [showWhiteout, setShowWhiteout] = useState(false);
   const [showRPS, setShowRPS] = useState(false);
@@ -3161,7 +3162,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             window.addEventListener('click', handleMouseClick);
             
             // After 10 seconds, execute the blast
-            setTimeout(() => {
+            outrageBlastTimeoutRef.current = window.setTimeout(() => {
+              // If the player already skipped, don't run the scheduled blast
+              if (outrageSkipped) {
+                outrageBlastTimeoutRef.current = null;
+                return;
+              }
               window.removeEventListener('keydown', handleSpaceKey);
               window.removeEventListener('click', handleMouseClick);
               setOutragePhase('blast');
@@ -5662,12 +5668,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   setOutragePhase('blast');
                   setShowWhiteout(true);
                   setOutrageBlastSize(300);
-                  
+                  // Clear the scheduled outrage timeout (we're executing now)
+                  if (outrageBlastTimeoutRef.current) {
+                    clearTimeout(outrageBlastTimeoutRef.current);
+                    outrageBlastTimeoutRef.current = null;
+                  }
                   // After animation completes, close UI and end turn
-                  setTimeout(() => {
+                        setTimeout(() => {
                     setShowWhiteout(false);
                     setShowOutrageUI(false);
-                    setOutrageSkipped(false);
+                          setOutrageSkipped(false);
+                          // Clear any pending scheduled outrage blast to avoid double-fire
+                          if (outrageBlastTimeoutRef.current) {
+                            clearTimeout(outrageBlastTimeoutRef.current);
+                            outrageBlastTimeoutRef.current = null;
+                          }
                     setDualityForm('normal');
                     setClydeGhoulTurnsLeft(0);
                     setCharacterMoves(CLYDE_NORMAL_MOVES);
