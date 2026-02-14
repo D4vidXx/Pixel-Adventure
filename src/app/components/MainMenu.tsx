@@ -42,6 +42,46 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
     ? 'radial-gradient(circle_at_50%_50%, #1a1d2e, #0f1117)'
     : (backgroundStyle ?? 'radial-gradient(circle_at_20%_15%, rgba(255,236,179,0.35), transparent 55%), linear-gradient(180deg, rgba(18,126,150,1) 0%, rgba(10,88,105,1) 48%, rgba(10,74,88,1) 68%, rgba(8,56,68,1) 100%)');
 
+  // Sorry Package claim logic
+  const [sorryClaimed, setSorryClaimed] = useState(() => localStorage.getItem('pixelAdventure_sorryPackageClaimed') === 'true');
+  const [showSorryAnim, setShowSorryAnim] = useState(false);
+  const handleSorryClaim = () => {
+    if (!sorryClaimed) {
+      const diamonds = parseInt(localStorage.getItem('pixelAdventure_diamonds') || '0', 10);
+      localStorage.setItem('pixelAdventure_diamonds', (diamonds + 5000).toString());
+      localStorage.setItem('pixelAdventure_sorryPackageClaimed', 'true');
+      setSorryClaimed(true);
+      setShowSorryAnim(true);
+      setTimeout(() => {
+        setShowSorryAnim(false);
+        window.location.reload(); // force update diamonds in UI
+      }, 2200);
+    }
+  };
+        {/* Sorry Package Animation */}
+        {showSorryAnim && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.5 }}
+            className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
+          >
+            <div className="relative">
+              {/* Confetti burst */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-6xl animate-bounce">🎉</span>
+                <span className="text-6xl animate-spin">💎</span>
+                <span className="text-6xl animate-bounce">🎉</span>
+              </div>
+              <div className="relative bg-yellow-400/90 border border-yellow-500 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center">
+                <span className="text-3xl font-black text-yellow-900 mb-2">5000 Diamonds Claimed!</span>
+                <span className="text-lg text-yellow-700">Thank you for your patience.</span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
   return (
     <div className="size-full flex items-center justify-center overflow-hidden relative px-4 py-8">
       <div className="absolute inset-0 pointer-events-none z-0">
@@ -278,6 +318,17 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
           transition={{ delay: 0.6, duration: 0.8 }}
           className="flex flex-col gap-4 sm:gap-5 min-w-[260px] sm:min-w-[320px]"
         >
+                    {/* Sorry Package Button */}
+                    {!sorryClaimed && !showSorryAnim && (
+                      <motion.button
+                        whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={handleSorryClaim}
+                        className="group px-8 py-4 bg-yellow-400/10 text-yellow-300 border border-yellow-400/30 rounded-2xl transition-all duration-300 backdrop-blur-md font-bold tracking-widest uppercase"
+                      >
+                        <span className="text-lg">🪙</span> Claim Sorry Package (+5000 Diamonds)
+                      </motion.button>
+                    )}
           <motion.button
             whileHover={{ scale: 1.05, boxShadow: "0 0 26px rgba(239, 68, 68, 0.4)" }}
             whileTap={{ scale: 0.98 }}
