@@ -10,6 +10,45 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: PatchNote[] = [
+        {
+            version: '1.5.4',
+            date: '2026-02-13',
+            title: 'Artifact & Equipment Balance Patch',
+            description: 'Major artifact and equipment nerfs/buffs for better game balance.',
+            sections: [
+                {
+                    title: '🧰 Equipment Changes',
+                    items: [
+                        'All equipment base stats (except dodge chance) now break the stat cap.',
+                        'Waving Cat no longer boosts speed.',
+                        'Beer stats buff: +3 → +2, now also gives +2 to a random stat on crit.',
+                        '4-Leaf Clover heal nerfed: 10 HP → 6 HP.',
+                        'Hardened Chest-Plate shield buff: 10 → 12.',
+                        'Dozens of Eggs cap reduced: 5 → 4.',
+                        'Magma Overlord defense increased: 220 → 320.',
+                    ]
+                },
+                {
+                    title: '🎲 Artifact Changes',
+                    items: [
+                        'Lucky Charm boost nerfed: 8% → 5%.',
+                        'Rubix Cube nerfed: 20% → 15%, max 3.',
+                        'Sharp Razor nerfed: 20% → 18%.',
+                        'Golden Apple heal nerfed: 8% → 6%, max 3.',
+                        'Wooden Mask shield nerfed: 15 → 8.',
+                        'Slime Boots nerfed: 25% → 10%.',
+                        'Cap the amount of Golden Apple and Rubix Cube to 3.',
+                        'Golden Apple and Rubix Cube now convert to another legendary artifact if you already own the maximum.',
+                    ]
+                },
+                {
+                    title: '🩹 Shop & Artifact Flow',
+                    items: [
+                        'Lucky Charm, Golden Apple, Rubix Cube, Wooden Mask, and Slime Boots removed from equipment shop (now artifacts only).',
+                    ]
+                }
+            ]
+        },
     {
         version: '1.5.3',
         date: '2026-02-13',

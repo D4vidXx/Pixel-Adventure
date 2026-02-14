@@ -267,7 +267,7 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                   const discounted = discountedIds.has(item.id);
                   const finalPrice = discounted ? Math.max(1, Math.floor(item.price * 0.7)) : item.price;
                   const canAfford = gold >= finalPrice;
-                  const statCap = currentStage === 2 ? 300 : 150;
+                  const statCap = currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
                   const isCapped = item.id === 'attack_upgrade' ? playerAttack >= statCap : item.id === 'defense_upgrade' ? playerDefense >= statCap : false;
                   const isClydeForbidden = item.id === 'attack_upgrade' && heroId === 'clyde';
                   const canPurchase = canAfford && !isCapped && !isClydeForbidden;
@@ -389,7 +389,7 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                             })()}
                           </div>
                           {(() => {
-                            const statCap = currentStage === 2 ? 300 : 150;
+                            const statCap = currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
                             const currentIsCapped = hoveredItem.id === 'attack_upgrade' ? playerAttack >= statCap : hoveredItem.id === 'defense_upgrade' ? playerDefense >= statCap : false;
                             const discounted = discountedIds.has(hoveredItem.id);
                             const finalPrice = discounted ? Math.max(1, Math.floor(hoveredItem.price * 0.7)) : hoveredItem.price;

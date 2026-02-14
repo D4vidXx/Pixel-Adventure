@@ -64,13 +64,28 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
               <h3 className="text-lg sm:text-xl text-slate-100 tracking-wider uppercase">
                 Choose Your Move
               </h3>
-              <button
-                onClick={onClose}
-                className="px-4 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-100 border border-slate-600/50 rounded-xl backdrop-blur-sm transition-all duration-200 flex items-center gap-2"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="text-sm tracking-wide uppercase">Back</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 bg-slate-800/60 hover:bg-slate-700/80 text-slate-100 border border-slate-600/50 rounded-xl backdrop-blur-sm transition-all duration-200 flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span className="text-sm tracking-wide uppercase">Back</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.endPlayerTurn) {
+                      window.endPlayerTurn();
+                    }
+                  }}
+                  className="px-4 py-2 bg-slate-700/60 hover:bg-slate-700/80 text-slate-200 border border-slate-500/60 hover:border-slate-400 font-bold rounded-xl transition-all text-xs sm:text-sm tracking-widest uppercase flex items-center gap-2 whitespace-nowrap"
+                  style={{ minWidth: 0, width: 'auto' }}
+                  title="Skip your turn"
+                >
+                  <span className="text-lg">⏭️</span>
+                  <span>Skip Turn</span>
+                </button>
+              </div>
             </div>
 
             {/* Moves Grid */}
@@ -156,64 +171,85 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
             </div>
           </div>
 
-          {/* Right: Move Details */}
-          <div className="bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-4 h-fit lg:sticky lg:top-0 shadow-xl shadow-black/20 max-h-[40vh] lg:max-h-none overflow-auto">
-            <h4 className="text-sm text-slate-400 tracking-wider uppercase mb-3">Move Details</h4>
-            <div className="min-h-[300px]">
-              {hoveredMove ? (
-                <div className="space-y-3">
-                  <div>
-                    <h5 className="text-lg text-slate-100 tracking-wide uppercase mb-1">
-                      {hoveredMove.name}
-                    </h5>
-                    <p className="text-sm text-slate-400 mb-3">
-                      {hoveredMove.description}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 text-sm border-t border-slate-700 pt-3">
-                    {hoveredMove.baseDamage !== undefined && (
-                      <div>
-                        <p className="text-slate-500 text-xs uppercase mb-1">Damage Calculation</p>
-                        <p className="text-slate-300">
-                          Base: <span className="text-red-400">{hoveredMove.baseDamage}</span>
-                        </p>
-                        <p className="text-slate-400 text-xs">
-                          + (Attack × 0.1) - (Enemy Defense × 0.1)
-                        </p>
+          {/* Right: Move Details + Skip Turn */}
+          <div className="flex flex-col gap-4">
+            <div className="bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-4 h-fit lg:sticky lg:top-0 shadow-xl shadow-black/20 max-h-[40vh] lg:max-h-none overflow-auto">
+              <h4 className="text-sm text-slate-400 tracking-wider uppercase mb-3">Move Details</h4>
+              <div className="min-h-[300px]">
+                {hoveredMove ? (
+                  <div className="space-y-3">
+                    <div className="mb-2">
+                      <div className="flex flex-row items-start gap-3 w-full">
+                        <div className="flex-1 min-w-0">
+                          <h5 className="text-lg text-slate-100 tracking-wide uppercase mb-1">
+                            {hoveredMove.name}
+                          </h5>
+                          <p className="text-sm text-slate-400 mb-3">
+                            {hoveredMove.description}
+                          </p>
+                        </div>
+                        {/* Skip Turn Button to the right of description */}
+                        <button
+                          onClick={() => {
+                            if (typeof window !== 'undefined' && window.endPlayerTurn) {
+                              window.endPlayerTurn();
+                            }
+                          }}
+                          className="px-4 py-2 bg-slate-700/60 hover:bg-slate-700/80 text-slate-200 border border-slate-500/60 hover:border-slate-400 font-bold rounded-xl transition-all text-xs sm:text-sm tracking-widest uppercase flex items-center gap-2 whitespace-nowrap"
+                          style={{ minWidth: 0, width: 'auto' }}
+                          title="Skip your turn"
+                        >
+                          <span className="text-lg">⏭️</span>
+                          <span>Skip Turn</span>
+                        </button>
                       </div>
-                    )}
+                    </div>
 
-                    {hoveredMove.defenseBoost !== undefined && (
-                      <div>
-                        <p className="text-slate-500 text-xs uppercase mb-1">Defense Boost</p>
-                        <p className="text-slate-300">
-                          Increases defense by <span className="text-blue-400">+{hoveredMove.defenseBoost}</span>
-                        </p>
-                        <p className="text-slate-400 text-xs">
-                          Flat defense increase for this battle
-                        </p>
-                      </div>
-                    )}
-
-                    <div className="border-t border-slate-700 pt-2 space-y-1">
-                      <p className="text-slate-300">
-                        Cost: <span className="text-purple-400">{hoveredMove.cost}</span> {resourceType}
-                      </p>
-                      {hoveredMove.cooldown > 0 && (
-                        <p className="text-slate-300">
-                          Cooldown: <span className="text-orange-400">{hoveredMove.cooldown}</span> turn{hoveredMove.cooldown > 1 ? 's' : ''}
-                        </p>
+                    <div className="space-y-2 text-sm border-t border-slate-700 pt-3">
+                      {hoveredMove.baseDamage !== undefined && (
+                        <div>
+                          <p className="text-slate-500 text-xs uppercase mb-1">Damage Calculation</p>
+                          <p className="text-slate-300">
+                            Base: <span className="text-red-400">{hoveredMove.baseDamage}</span>
+                          </p>
+                          <p className="text-slate-400 text-xs">
+                            + (Attack × 0.1) - (Enemy Defense × 0.1)
+                          </p>
+                        </div>
                       )}
+
+                      {hoveredMove.defenseBoost !== undefined && (
+                        <div>
+                          <p className="text-slate-500 text-xs uppercase mb-1">Defense Boost</p>
+                          <p className="text-slate-300">
+                            Increases defense by <span className="text-blue-400">+{hoveredMove.defenseBoost}</span>
+                          </p>
+                          <p className="text-slate-400 text-xs">
+                            Flat defense increase for this battle
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="border-t border-slate-700 pt-2 space-y-1">
+                        <p className="text-slate-300">
+                          Cost: <span className="text-purple-400">{hoveredMove.cost}</span> {resourceType}
+                        </p>
+                        {hoveredMove.cooldown > 0 && (
+                          <p className="text-slate-300">
+                            Cooldown: <span className="text-orange-400">{hoveredMove.cooldown}</span> turn{hoveredMove.cooldown > 1 ? 's' : ''}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <p className="text-slate-500 text-sm italic">
-                  Hover over a move to see detailed information
-                </p>
-              )}
+                ) : (
+                  <p className="text-slate-500 text-sm italic">
+                    Hover over a move to see detailed information
+                  </p>
+                )}
+              </div>
             </div>
+            {/* Skip Turn Button moved above, now removed here */}
           </div>
         </div>
       </div>

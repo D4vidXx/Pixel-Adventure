@@ -53,7 +53,7 @@ export const LOOT_ITEMS = {
   golden_apple: {
     id: 'golden_apple',
     name: 'Golden Apple',
-    description: 'At the end of your turn, heal 8% of your max HP',
+    description: 'At the end of your turn, heal 6% of your max HP (max 3)',
     rarity: 'legendary' as const,
   },
   golden_crown: {
@@ -65,7 +65,7 @@ export const LOOT_ITEMS = {
   finished_rubix_cube: {
     id: 'finished_rubix_cube',
     name: 'Finished Rubix Cube',
-    description: 'Permanently increases attack and defense by 20%',
+    description: 'Permanently increases attack and defense by 15% (max 3)',
     rarity: 'legendary' as const,
   },
   disco_ball: {
@@ -77,19 +77,19 @@ export const LOOT_ITEMS = {
   lucky_charm: {
     id: 'lucky_charm',
     name: 'Lucky Charm',
-    description: 'Permanently increase your highest stat by 8% (Atk/Def/Spd only)',
+    description: 'Permanently increase your highest stat by 5% (Atk/Def/Spd only)',
     rarity: 'rare' as const,
   },
   wooden_mask: {
     id: 'wooden_mask',
     name: 'Wooden Mask',
-    description: 'Grants +15 Shield at the start of every level',
+    description: 'Grants +8 Shield at the start of every level',
     rarity: 'rare' as const,
   },
   slime_boots: {
     id: 'slime_boots',
     name: 'Slime Boots',
-    description: 'Reduces the first attack you take in a level by 25% (caps at 50%)',
+    description: 'Reduces the first attack you take in a level by 10%',
     rarity: 'rare' as const,
   },
   pirates_chest: {

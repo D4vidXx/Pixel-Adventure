@@ -727,7 +727,7 @@ export const STAGE_3_LEVELS: Record<number, LevelData> = {
         type: 'BOSS',
         maxHealth: 1200,
         attack: 60,
-        defense: 220,
+        defense: 320,
         baseDamage: 50,
       },
     ],

@@ -281,8 +281,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const defenseCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 0.7) : baseCap;
   const attackBonusFromUpgrades = hero.id === 'clyde' ? 0 : permanentUpgrades.attackBonus;
   const attackBase = hero.id === 'clyde' ? hero.stats.attack : playerAttack;
+  // Calculate capped stats (excluding equipment base bonuses)
   const cappedAttack = ignoreCap ? attackBase + attackBonusFromUpgrades : Math.min(attackCap, attackBase + attackBonusFromUpgrades);
   const cappedDefense = ignoreCap ? playerDefense + permanentUpgrades.defenseBonus : Math.min(defenseCap, playerDefense + permanentUpgrades.defenseBonus);
+
+  // Always add equipment base stat bonuses after capping
+  // Add equipment bonuses after cap (reuse already declared equipAttackBonus, equipDefenseBonus)
+  const uncappedAttack = cappedAttack + equipAttackBonus;
+  const uncappedDefense = cappedDefense + equipDefenseBonus;
 
   const attackMultiplier = hero.id === 'clyde' ? 1 : (hasEquipment('gasoline_cane') ? 1.3 : 1);
   const defenseMultiplier = (hasEquipment('crab_claws') ? 1.3 : 1) * (hasEquipment('gasoline_cane') ? 0.7 : 1);
@@ -290,8 +296,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const attackBonusFromArtifacts = hero.id === 'clyde' ? 0 : artifactBonusStats.attack;
   // Lucian Passive: +1 ATK for every 10 Soul (uncapped)
   const lucianSoulBonus = hero.id === 'lucian' ? Math.floor(lucianSoulMeter / 10) : 0;
-  const finalAttack = Math.floor((cappedAttack + attackBonusFromArtifacts + lucianSoulBonus) * attackMultiplier);
-  const finalDefense = Math.floor((cappedDefense + artifactBonusStats.defense) * defenseMultiplier);
+  const finalAttack = Math.floor((uncappedAttack + attackBonusFromArtifacts + lucianSoulBonus) * attackMultiplier);
+  const finalDefense = Math.floor((uncappedDefense + artifactBonusStats.defense) * defenseMultiplier);
 
   const baseSpeed = hero.stats.speed + equipSpeedBonus + bonusSpeed + (pirateShipActive ? pirateShipSpeedBonus : 0);
   const effectiveSpeed = Math.max(0, Math.floor(baseSpeed * (playerSpeedDebuffTurns > 0 ? 0.5 : 1)));
@@ -748,30 +754,36 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   // Dice roll helpers
-  const rollD20 = (): number => {
-    // Rogue class gets +20% crit chance (25% instead of 5%)
-    // Ancient Rune Stone (+10% -> +2 on d20)
-    // Beer (+5% -> +1 on d20)
-    let critThreshold = 20;
-    if (hasEquipment('ancient_rune_stone')) critThreshold -= 2;
-    if (hasEquipment('beer')) critThreshold -= 1;
-    if (hasEquipment('sharp_razor')) critThreshold -= 4;
-    if (hasEquipment('blood_vile')) critThreshold -= 1;
-    critThreshold = Math.max(2, critThreshold);
+  // Dice roll helpers
+  const rollD20 = (isPlayer = false): number => {
+    if (isPlayer) {
+      // Rogue class gets +20% crit chance (25% instead of 5%)
+      // Ancient Rune Stone (+10% -> +2 on d20)
+      // Beer (+5% -> +1 on d20)
+      let critThreshold = 20;
+      if (hasEquipment('ancient_rune_stone')) critThreshold -= 2;
+      if (hasEquipment('beer')) critThreshold -= 1;
+      if (hasEquipment('sharp_razor')) critThreshold -= 4;
+      if (hasEquipment('blood_vile')) critThreshold -= 1;
+      critThreshold = Math.max(2, critThreshold);
 
-    // Rogue class gets +20% crit chance (crit on 17+)
-    if (hero.classId === 'rogue') {
-      const roll = Math.random() * 100;
-      const baseCritChance = 25; // Rogue base
-      const itemCritChance = (hasEquipment('ancient_rune_stone') ? 10 : 0) + (hasEquipment('beer') ? 5 : 0) + (hasEquipment('sharp_razor') ? 20 : 0) + (hasEquipment('blood_vile') ? 5 : 0);
-      return roll < (baseCritChance + itemCritChance) ? 20 : Math.floor(Math.random() * 19) + 1;
+      // Rogue class gets +20% crit chance (crit on 17+)
+      if (hero.classId === 'rogue') {
+        const roll = Math.random() * 100;
+        const baseCritChance = 25; // Rogue base
+        const itemCritChance = (hasEquipment('ancient_rune_stone') ? 10 : 0) + (hasEquipment('beer') ? 5 : 0) + (hasEquipment('sharp_razor') ? 20 : 0) + (hasEquipment('blood_vile') ? 5 : 0);
+        return roll < (baseCritChance + itemCritChance) ? 20 : Math.floor(Math.random() * 19) + 1;
+      }
+
+      // Normal logic
+      const roll = Math.floor(Math.random() * 20) + 1;
+      // If roll is high enough based on items
+      if (roll >= critThreshold) return 20;
+      return roll;
+    } else {
+      // Enemy crits: always 5% (20 on d20)
+      return Math.floor(Math.random() * 20) + 1;
     }
-
-    // Normal logic
-    const roll = Math.floor(Math.random() * 20) + 1;
-    // If roll is high enough based on items
-    if (roll >= critThreshold) return 20;
-    return roll;
   };
 
   const rollDamageVariance = (): number => {
@@ -1013,7 +1025,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (result === 'correct') {
       grantArtifact('turtle_shell', 'Wise Turtle');
       addLog('🐢 The Wise Turtle nods and lets you pass.');
-      proceedToNextLevel();
+      // Remove turtle from enemies and trigger victory
+      setEnemies(prev => prev.filter(e => e.name !== 'Wise Turtle'));
+      addLog('🏆 Wise Turtle defeated!');
+      setTimeout(() => {
+        setShowRewardScreen(true);
+      }, 800);
       return;
     }
 
@@ -1145,10 +1162,25 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   ];
 
   const grantArtifact = (artifactId: string, sourceLabel: string) => {
+    // Cap logic for legendary artifacts
     if (artifactId === 'disco_ball' && (artifacts['disco_ball'] || 0) >= 2) {
       const legendaryOptions = ['golden_apple', 'golden_crown', 'finished_rubix_cube'];
       const replacement = legendaryOptions[Math.floor(Math.random() * legendaryOptions.length)];
       addLog(`🪩 Disco Ball cap reached (2). Converted into another legendary!`);
+      grantArtifact(replacement, sourceLabel);
+      return;
+    }
+    if (artifactId === 'golden_apple' && (artifacts['golden_apple'] || 0) >= 3) {
+      const legendaryOptions = ['golden_crown', 'finished_rubix_cube', 'disco_ball'];
+      const replacement = legendaryOptions[Math.floor(Math.random() * legendaryOptions.length)];
+      addLog(`🍎 Golden Apple cap reached (3). Converted into another legendary!`);
+      grantArtifact(replacement, sourceLabel);
+      return;
+    }
+    if (artifactId === 'finished_rubix_cube' && (artifacts['finished_rubix_cube'] || 0) >= 3) {
+      const legendaryOptions = ['golden_apple', 'golden_crown', 'disco_ball'];
+      const replacement = legendaryOptions[Math.floor(Math.random() * legendaryOptions.length)];
+      addLog(`🎲 Rubix Cube cap reached (3). Converted into another legendary!`);
       grantArtifact(replacement, sourceLabel);
       return;
     }
@@ -1365,7 +1397,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       aliveEnemies.forEach((enemy, index) => {
         setTimeout(() => {
           let damage: number;
-          const critRoll = rollD20();
+          const critRoll = rollD20(false); // enemy attack
           let isCritical = critRoll === 20;
 
           // Decrement Lord Inferno aura cooldown
@@ -1672,7 +1704,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               const reducedDamage = Math.floor(damage * (1 - reduction));
               damage = Math.max(0, reducedDamage);
               setSlimeBootsUsedThisLevel(true);
-              addLog(`🟢 Slime Boots reduce the first hit by ${Math.floor(reduction * 100)}%!`);
+              if (reduction === 0.1) {
+                addLog(`🟢 Slime Boots reduce the first hit by 10% of damage!`);
+              } else {
+                addLog(`🟢 Slime Boots reduce the first hit by ${Math.floor(reduction * 100)}%!`);
+              }
             }
 
             damage = applyTurtleShellReduction(damage);
@@ -2000,22 +2036,22 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     if (hasEquipment('movie_popcorn')) {
-      if (popcornEatenThisLevel < 5) {
+      if (popcornEatenThisLevel < 4) {
         setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 1 }));
         setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 1));
         setPopcornEatenThisLevel(prev => prev + 1);
-        addLog(`🥚 Dozens of Eggs: +1 Max HP (${popcornEatenThisLevel + 1}/5).`);
-      }
-
-      if (Math.random() < 0.05) {
-        const boostedMaxHealth = maxPlayerHealth + 20;
-        const salmonellaLoss = Math.floor(boostedMaxHealth * 0.2);
-        setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 20 }));
-        setPlayerHealth(prev => {
-          const afterBonus = Math.min(boostedMaxHealth, prev + 20);
-          return Math.max(1, afterBonus - salmonellaLoss);
-        });
-        addLog(`🥚 Lucky Eggs! +20 Max HP, but Salmonella hits (-20% HP).`);
+        addLog(`🥚 Dozens of Eggs: +1 Max HP (${popcornEatenThisLevel + 1}/4).`);
+        // Only allow Lucky Egg proc if still under cap
+        if (Math.random() < 0.05) {
+          const boostedMaxHealth = maxPlayerHealth + 20;
+          const salmonellaLoss = Math.floor(boostedMaxHealth * 0.2);
+          setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 20 }));
+          setPlayerHealth(prev => {
+            const afterBonus = Math.min(boostedMaxHealth, prev + 20);
+            return Math.max(1, afterBonus - salmonellaLoss);
+          });
+          addLog(`🥚 Lucky Eggs! +20 Max HP, but Salmonella hits (-20% HP).`);
+        }
       }
     }
 
@@ -4293,6 +4329,18 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
   };
 
+  // Expose a global function to allow MoveSelection to end the player's turn
+  if (typeof window !== 'undefined') {
+    (window as any).endPlayerTurn = () => {
+      setShowMoveSelection(false);
+      // End-of-turn logic for skipping turn
+      consumePlayerWeaknessTurn();
+      decrementCooldowns();
+      setIsPlayerTurn(false);
+      enemyTurn();
+    };
+  }
+
   const handleFight = () => {
     if (!isPlayerTurn) return;
     setShowMoveSelection(true);
@@ -4528,9 +4576,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setTimeout(() => {
           setCurrentStage(2);
           setCurrentLevel(1);
-          setPlayerHealth(maxPlayerHealth); // Full Heal
+          setPermanentUpgrades(prev => {
+            const newBonus = prev.healthBonus + 25;
+            setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus); // Full Heal with new max
+            return { ...prev, healthBonus: newBonus };
+          });
           setPlayerResource(maxPlayerResource); // Full Resource
-          addLog('❤️ Fully Healed & Restored for the next stage!');
+          addLog('❤️ Fully Healed & Restored for the next stage! (+25 Max HP)');
           loadLevel(1, 2); // Force load Stage 2 Level 1
           setShowRewardScreen(false);
           setShowShop(true); // Open Shop
@@ -6780,7 +6832,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         {
           !showMoveSelection && !showItemSelection ? (
             <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6">
+
               <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+
                 <motion.button
                   whileHover={isPlayerTurn ? { scale: 1.05, y: -5 } : {}}
                   whileTap={isPlayerTurn ? { scale: 0.95 } : {}}
@@ -6853,6 +6907,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                     </span>
                   </div>
                 </motion.button>
+
               </div>
             </div>
           ) : showMoveSelection ? (
