@@ -702,7 +702,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     addLog(`✨ New level! Restored ${resourceBonus} ${resourceType} and healed ${healthBonus} HP!`);
 
     if (artifacts['wooden_mask']) {
-      const shieldBonus = 15 * artifacts['wooden_mask'];
+      const shieldBonus = 8 * artifacts['wooden_mask'];
       setPlayerShield(prev => prev + shieldBonus);
       addLog(`🎭 Wooden Mask grants +${shieldBonus} Shield!`);
     }
@@ -1264,8 +1264,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     if (artifactId === 'wooden_mask') {
-      setPlayerShield(prev => prev + 15);
-      addLog(`🎭 Wooden Mask grants +15 Shield!`);
+      setPlayerShield(prev => prev + 8);
+      addLog(`🎭 Wooden Mask grants +8 Shield!`);
     }
   };
 
