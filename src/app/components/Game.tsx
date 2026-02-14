@@ -5258,43 +5258,41 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     );
   }
 
-  // Show shop if active
-  if (showShop) {
-    return (
-      <Shop
-        gold={gold}
-        characterClass={hero.classId}
-        currentMoves={characterMoves}
-        ownedSpecialMoves={ownedSpecialMoves}
-        playerAttack={playerAttack + permanentUpgrades.attackBonus}
-        playerDefense={playerDefense + permanentUpgrades.defenseBonus}
-        currentStage={currentStage}
-        heroId={hero.id}
-        onPurchase={handleShopPurchase}
-        onPurchaseMove={handlePurchaseMove}
-        onClose={handleCloseShop}
-      />
-    );
-  }
+                  // Immediately finish Outrage skip without playing the blast animation
+                  // Clear any scheduled outrage blast to avoid duplicates
+                  if (outrageBlastTimeoutRef.current) {
+                    clearTimeout(outrageBlastTimeoutRef.current);
+                    outrageBlastTimeoutRef.current = null;
+                  }
 
-  // Show rest screen if active
-  if (showRest) {
-    return (
-      <RestScreen
-        currentHealth={playerHealth}
-        maxHealth={maxPlayerHealth}
-        onRest={handleRest}
-      />
-    );
-  }
+                  setShowOutrageUI(false);
+                  setOutrageSkipped(false);
+                  setDualityForm('normal');
+                  setClydeGhoulTurnsLeft(0);
+                  setCharacterMoves(CLYDE_NORMAL_MOVES);
+                  addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
 
-  // Show lose screen if player died
-  if (showLoseScreen) {
-    return (
-      <LoseScreen
-        damageDealt={totalDamageDealt}
-        damageTaken={totalDamageTaken}
-        goldAccumulated={totalGoldEarned}
+                  // Check for defeated enemies
+                  const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
+                  defeated.forEach(e => {
+                    handleEnemyDefeated(e, updatedEnemies);
+                  });
+
+                  const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
+                  if (aliveAfter.length === 0) {
+                    addLog(`🏆 All enemies defeated! Victory!`);
+                    setTimeout(() => {
+                      if ([3, 6, 9].includes(currentLevel)) {
+                        setShowInterlude(true);
+                      } else {
+                        setShowRewardScreen(true);
+                      }
+                    }, 1000);
+                  } else {
+                    decrementCooldowns();
+                    setIsPlayerTurn(false);
+                    enemyTurn(updatedEnemies, false, false);
+                  }
         legendaryArtifacts={artifacts}
         onTryAgain={handleTryAgain}
         onReturnToMenu={handleReturnToMenu}
