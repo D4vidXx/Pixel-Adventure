@@ -1,4 +1,6 @@
 import { Heart, Shield, Sword, Package, ArrowLeft, Zap, Coins, Target, Sparkles, Moon, Music } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
+import { ARTIFACT_DESCRIPTIONS, DEBUFF_DESCRIPTIONS } from './data/artifact-descriptions';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
@@ -12,7 +14,7 @@ import { Shop } from './Shop';
 import { RestScreen } from './RestScreen';
 import { InterludeScreen } from './InterludeScreen';
 import { StageBackground } from './StageBackground';
-import { STAGE_1_LEVELS, STAGE_2_LEVELS, STAGE_3_LEVELS, Enemy, getEnemyEmoji } from './EnemyData';
+import { STAGE_1_LEVELS, STAGE_2_LEVELS, STAGE_3_LEVELS, STAGE_4_LEVELS, Enemy, getEnemyEmoji } from './EnemyData';
 import { EnemyDisplay } from './EnemyDisplay';
 import { getSpecialMovePrice, SPECIAL_MOVES } from './MoveShop';
 import {
@@ -298,6 +300,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [outrageSkipped, setOutrageSkipped] = useState(false);
   const outrageLabelRef = useRef<{ handleSpaceKey: ((e: KeyboardEvent) => void) | null, handleMouseClick: (() => void) | null }>({ handleSpaceKey: null, handleMouseClick: null });
   const outrageBlastTimeoutRef = useRef<number | null>(null);
+  const outrageSkippedRef = useRef(false);
+  const outrageCountdownIntervalRef = useRef<number | null>(null);
+  const outragePostBlastTimeoutRef = useRef<number | null>(null);
+  const outrageExecutedRef = useRef(false);
+  const stageTransitionAppliedRef = useRef(false);
   const [screenShakeIntensity, setScreenShakeIntensity] = useState(0);
   const [showWhiteout, setShowWhiteout] = useState(false);
   const [showRPS, setShowRPS] = useState(false);
@@ -314,7 +321,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const maxPlayerHealth = hero.stats.health + permanentUpgrades.healthBonus + equipHealthBonus;
   const maxPlayerResource = hero.classId === 'gunslinger' ? 8 : 100;
 
-  const getStatCap = () => (currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150);
+  const getStatCap = () => (currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150);
 
   const ignoreCap = hasEquipment('beer') || hasEquipment('chinese_waving_cat');
   const baseCap = getStatCap();
@@ -506,12 +513,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         const stage = stageInput ? parseInt(stageInput, 10) : NaN;
         const level = levelInput ? parseInt(levelInput, 10) : NaN;
 
-        const isStageValid = stage === 1 || stage === 2 || stage === 3;
+        const isStageValid = stage === 1 || stage === 2 || stage === 3 || stage === 4;
         const levelData = stage === 1
           ? STAGE_1_LEVELS[level]
           : stage === 2
             ? STAGE_2_LEVELS[level]
-            : STAGE_3_LEVELS[level];
+            : stage === 3
+              ? STAGE_3_LEVELS[level]
+              : STAGE_4_LEVELS[level];
 
         if (!isStageValid || !levelData) {
           addLog('❌ DEV CHEAT: Invalid stage/level.');
@@ -530,6 +539,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setIsTransitioning(false);
         loadLevel(level, stage);
         addLog('❤️ Fully Healed!');
+      }
+
+      if (e.key.toLowerCase() === 'f' && (e.ctrlKey || e.altKey)) {
+        addLog('🌲 DEV CHEAT: Jumping to Fairy Forest (Stage 4 Level 1)...');
+        setCurrentStage(4);
+        setCurrentLevel(1);
+        setPlayerHealth(maxPlayerHealth);
+        setIsPlayerTurn(true);
+        setShowRewardScreen(false);
+        setShowShop(false);
+        setShowRest(false);
+        setShowInterlude(false);
+        setIsTransitioning(false);
+        loadLevel(1, 4);
+        addLog('❤️ Fairy Forest awaits! Fully Healed!');
       }
 
       if (e.key.toLowerCase() === 'c' && (e.ctrlKey || e.altKey)) {
@@ -602,7 +626,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       ? STAGE_1_LEVELS[level]
       : stageToLoad === 2
         ? STAGE_2_LEVELS[level]
-        : STAGE_3_LEVELS[level];
+        : stageToLoad === 3
+          ? STAGE_3_LEVELS[level]
+          : STAGE_4_LEVELS[level];
     if (!levelData) return;
 
     // Initialize enemies with their current health
@@ -1473,11 +1499,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               setLordInfernoAuraCooldown(5);
             }
 
-            // Decide between normal attack or Giant Spear
-            const spearRoll = Math.random();
-            if (spearRoll < 0.4) { // 40% chance to use Giant Spear
-              isUsingGiantSpear = true;
-            }
+            // Lord Inferno always uses Giant Spear as main attack
+            isUsingGiantSpear = true;
           }
 
           // Lord Inferno Power Meter Logic (4 stacks = Guaranteed Crit)
@@ -1703,6 +1726,35 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 setGuaranteedDodge(false);
               }
               addLog(`💨 You dodged ${enemy.name}'s attack!`);
+              // Shinjiro Passive: Shadow Meter fills on dodge
+              if (hero.id === 'shinjiro') {
+                setShadowMeter(prev => {
+                  const next = prev + 1;
+                  if (next >= 2) {
+                    setTimeout(() => {
+                      addLog(`🌑 Shinjiro unleashes Shadow Strike! (25% ATK x3, +0.5% dodge)`);
+                      // Calculate total attack (base + bonuses)
+                      const totalAttack = playerAttack;
+                      const shadowStrikeDmg = Math.floor(totalAttack * 0.25);
+                      for (let i = 0; i < 3; i++) {
+                        setEnemies(prevEnemies => prevEnemies.map(e => {
+                          if (e.currentHealth > 0) {
+                            const newHealth = Math.max(0, e.currentHealth - shadowStrikeDmg);
+                            if (newHealth < e.currentHealth) {
+                              addLog(`🗡️ Shadow Strike hits ${e.name} for ${shadowStrikeDmg} true damage!`);
+                            }
+                            return { ...e, currentHealth: newHealth };
+                          }
+                          return e;
+                        }));
+                      }
+                      setBonusDodgeChance(bonus => bonus + 0.5);
+                      setShadowMeter(0);
+                    }, 500);
+                  }
+                  return next >= 2 ? 2 : next;
+                });
+              }
               if (hasEquipment('four_leaf_clover')) {
                 setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 4));
                 addLog(`🍀 4-Leaf Clover restores 4 HP!`);
@@ -1736,15 +1788,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
 
             if (artifacts['slime_boots'] && !slimeBootsUsedThisLevel) {
-              const reduction = Math.min(0.25 * artifacts['slime_boots'], 0.5);
+              const reduction = 0.1; // Always 10% for first hit
               const reducedDamage = Math.floor(damage * (1 - reduction));
               damage = Math.max(0, reducedDamage);
               setSlimeBootsUsedThisLevel(true);
-              if (reduction === 0.1) {
-                addLog(`🟢 Slime Boots reduce the first hit by 10% of damage!`);
-              } else {
-                addLog(`🟢 Slime Boots reduce the first hit by ${Math.floor(reduction * 100)}%!`);
-              }
+              addLog(`🟢 Slime Boots reduce the first hit by 10% of damage!`);
             }
 
             damage = applyTurtleShellReduction(damage);
@@ -1866,8 +1914,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 addLog(`🔴 Lord Inferno leeches ${lifestealed} HP from the wound!`);
               }
 
-              // Giant Spear 40% chance to attack again (with delay, can chain)
-              if (isUsingGiantSpear && Math.random() < 0.4) {
+              // Giant Spear 50% chance to attack again (with delay, can chain)
+              if (isUsingGiantSpear && Math.random() < 0.5) {
                 const performSpearChain = (attackNumber: number) => {
                   setTimeout(() => {
                     addLog(`🔱 Giant Spear triggers! Attacking again!`);
@@ -2131,25 +2179,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     if (artifacts['golden_crown']) {
       const crownRoll = Math.random() * 100;
-      const crownChance = Math.min(100, artifacts['golden_crown']);
-      const aliveEnemies = enemiesRef.current.filter(e => e.currentHealth > 0);
-      if (aliveEnemies.length > 0 && crownRoll < crownChance) {
-        addLog(`👑 CROWN OF RUIN — INSTANT VICTORY!`);
-        setEnemies(prev => {
-          const updated = prev.map(e => e.currentHealth > 0 ? { ...e, currentHealth: 0 } : e);
-          setTimeout(() => {
-            updated.filter(e => e.currentHealth === 0).forEach(enemy => handleEnemyDefeated(enemy, updated));
-            addLog(`🏆 All enemies defeated! Victory!`);
-            setTimeout(() => {
-              if ([3, 6, 9].includes(currentLevel)) {
-                setShowInterlude(true);
-              } else {
-                setShowRewardScreen(true);
-              }
-            }, 1000);
-          }, 0);
-          return updated;
-        });
+      // 1% chance per golden crown (capped at 100%)
+      const crownChance = Math.min(artifacts['golden_crown'], 100);
+      if (crownRoll < crownChance) {
+        setPlayerHealth(maxPlayerHealth);
+        setPlayerShield(0);
+        addLog(`👑 Golden Crown restores you to full health!`);
       }
     }
 
@@ -3108,6 +3143,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setScreenShakeIntensity(0);
       setShowWhiteout(false);
       setOutrageSkipped(false);
+      outrageSkippedRef.current = false;
+      outrageExecutedRef.current = false;
       
       // 1 second delay before countdown starts
       setTimeout(() => {
@@ -3115,12 +3152,19 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         let countdown = 3;
         
         // Countdown timer (3, 2, 1)
-        const countdownInterval = setInterval(() => {
+        outrageCountdownIntervalRef.current = window.setInterval(() => {
           countdown--;
           setOutrageCountdown(countdown);
           
           if (countdown === 0) {
-            clearInterval(countdownInterval);
+            if (outrageCountdownIntervalRef.current) {
+              clearInterval(outrageCountdownIntervalRef.current);
+              outrageCountdownIntervalRef.current = null;
+            }
+            // If the player skipped during countdown, abort entering spam
+            if (outrageSkippedRef.current) {
+              return;
+            }
             setOutragePhase('spam');
             
             // Now handle space key and mouse click spam for 10 seconds
@@ -3128,7 +3172,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             const spamStartTime = Date.now();
             
             const handleInput = () => {
-              if (outrageSkipped) return;
+              if (outrageSkippedRef.current) return;
               const elapsed = Date.now() - spamStartTime;
               if (elapsed < 10000) {
                 spaceCount++;
@@ -3163,11 +3207,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             
             // After 10 seconds, execute the blast
             outrageBlastTimeoutRef.current = window.setTimeout(() => {
-              // If the player already skipped, don't run the scheduled blast
-              if (outrageSkipped) {
+              // If the player already skipped or we've already executed, don't run the scheduled blast
+              if (outrageSkippedRef.current || outrageExecutedRef.current) {
                 outrageBlastTimeoutRef.current = null;
                 return;
               }
+              // Mark executed to prevent races with Skip
+              outrageExecutedRef.current = true;
               window.removeEventListener('keydown', handleSpaceKey);
               window.removeEventListener('click', handleMouseClick);
               setOutragePhase('blast');
@@ -3237,11 +3283,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               setScreenShakeIntensity(0);
               
               // Return to normal form after ghoul turn (only 1 turn in ghoul form)
-              setTimeout(() => {
+              outragePostBlastTimeoutRef.current = window.setTimeout(() => {
+                // clear ref (we're executing)
+                outragePostBlastTimeoutRef.current = null;
                 setShowWhiteout(false);
-                setShowOutrageUI(false);
-                setOutrageSkipped(false);
-                setDualityForm('normal');
+                  setShowOutrageUI(false);
+                  setOutrageSkipped(false);
+                  outrageSkippedRef.current = false;
+                  setDualityForm('normal');
                 setClydeGhoulTurnsLeft(0);
                 setCharacterMoves(CLYDE_NORMAL_MOVES);
                 addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
@@ -4672,11 +4721,29 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           }
         }, 1500);
       } else if (currentStage === 3 && currentLevel === 16) {
-        addLog('🏆 VICTORY! You have conquered the Molten Frontier!');
+        if (stageTransitionAppliedRef.current) {
+          setIsTransitioning(false);
+          return;
+        }
+        stageTransitionAppliedRef.current = true;
+        addLog('🏆 Stage 3 Complete! Entering the Fairy Forest...');
         setTimeout(() => {
+          setCurrentStage(4);
+          setCurrentLevel(1);
+          const bonusHealth = 100;
+          setPermanentUpgrades(prev => {
+            const newBonus = prev.healthBonus + bonusHealth;
+            setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus);
+            return { ...prev, healthBonus: newBonus };
+          });
+          setPlayerResource(maxPlayerResource);
+          addLog('❤️ Stage 4 blessing: +100 Max HP and fully restored resources!');
+          loadLevel(1, 4);
+          setShowRewardScreen(false);
           setShowShop(true);
           setIsPostStageTransitionShop(true);
           setIsTransitioning(false);
+          stageTransitionAppliedRef.current = false;
         }, 1500);
       } else {
         const nextLevel = currentLevel + 1;
@@ -4872,7 +4939,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
-    if (currentStage === 3 && currentLevel === 5 && !lavaDragonSpawned && defeatedEnemy.name === 'Lava Dragon') {
+    if (currentStage === 3 && currentLevel === 15 && !lavaDragonSpawned && defeatedEnemy.name === 'Lava Dragon') {
       const spawnedPebbles = Array.from({ length: 12 }, (_, i) => ({
         id: `dragon_pebble_${i + 1}`,
         name: 'Lava Pebble',
@@ -4892,9 +4959,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         standoffTurns: 0,
       }));
 
-      currentEnemies.length = 0;
-      currentEnemies.push(...spawnedPebbles);
-      setEnemies(currentEnemies as any);
+      // Remove only the defeated Lava Dragon, keep other enemies
+      const filteredEnemies = currentEnemies.filter(e => e.id !== defeatedEnemy.id);
+      const newEnemies = [...filteredEnemies, ...spawnedPebbles];
+      setEnemies(newEnemies as any);
       setSelectedTargetId(spawnedPebbles[0]?.id || null);
       setLavaDragonSpawned(true);
       addLog('🐉 The Lava Dragon collapses, releasing a swarm of blazing pebbles!');
@@ -5257,49 +5325,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       />
     );
   }
-
-                  // Immediately finish Outrage skip without playing the blast animation
-                  // Clear any scheduled outrage blast to avoid duplicates
-                  if (outrageBlastTimeoutRef.current) {
-                    clearTimeout(outrageBlastTimeoutRef.current);
-                    outrageBlastTimeoutRef.current = null;
-                  }
-
-                  setShowOutrageUI(false);
-                  setOutrageSkipped(false);
-                  setDualityForm('normal');
-                  setClydeGhoulTurnsLeft(0);
-                  setCharacterMoves(CLYDE_NORMAL_MOVES);
-                  addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
-
-                  // Check for defeated enemies
-                  const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
-                  defeated.forEach(e => {
-                    handleEnemyDefeated(e, updatedEnemies);
-                  });
-
-                  const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
-                  if (aliveAfter.length === 0) {
-                    addLog(`🏆 All enemies defeated! Victory!`);
-                    setTimeout(() => {
-                      if ([3, 6, 9].includes(currentLevel)) {
-                        setShowInterlude(true);
-                      } else {
-                        setShowRewardScreen(true);
-                      }
-                    }, 1000);
-                  } else {
-                    decrementCooldowns();
-                    setIsPlayerTurn(false);
-                    enemyTurn(updatedEnemies, false, false);
-                  }
-        legendaryArtifacts={artifacts}
-        onTryAgain={handleTryAgain}
-        onReturnToMenu={handleReturnToMenu}
-        combatLog={combatLog}
-      />
-    );
-  }
+  
+  // If the player was defeated, render the Lose screen
+  if (showLoseScreen) {
+          return (
+            <LoseScreen
+              damageDealt={totalDamageDealt}
+              damageTaken={totalDamageTaken}
+              goldAccumulated={totalGoldEarned}
+              legendaryArtifacts={artifacts}
+              onTryAgain={handleTryAgain}
+              onReturnToMenu={handleReturnToMenu}
+              combatLog={combatLog}
+            />
+          );
+        }
 
   // Show reward screen if active
   if (showRewardScreen) {
@@ -5313,6 +5353,25 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         onSelectBossLoots={handleSelectBossLoots}
         ownedArtifacts={artifacts}
         combatLog={combatLog}
+      />
+    );
+  }
+
+  // Render Shop UI if open
+  if (showShop) {
+    return (
+      <Shop
+        gold={gold}
+        characterClass={hero.classId}
+        currentMoves={characterMoves}
+        ownedSpecialMoves={ownedSpecialMoves}
+        playerAttack={playerAttack}
+        playerDefense={playerDefense}
+        currentStage={currentStage}
+        heroId={hero.id}
+        onPurchase={handleShopPurchase}
+        onPurchaseMove={handlePurchaseMove}
+        onClose={handleCloseShop}
       />
     );
   }
@@ -5613,11 +5672,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 onClick={() => {
                   // Skip outrage - deal 65 damage with animation
                   setOutrageSkipped(true);
+                  outrageSkippedRef.current = true;
+                  outrageExecutedRef.current = true;
+                  // Clear countdown interval if we're skipping early
+                  if (outrageCountdownIntervalRef.current) {
+                    clearInterval(outrageCountdownIntervalRef.current);
+                    outrageCountdownIntervalRef.current = null;
+                  }
                   if (outrageLabelRef.current.handleSpaceKey) {
                     window.removeEventListener('keydown', outrageLabelRef.current.handleSpaceKey);
+                    outrageLabelRef.current.handleSpaceKey = null;
                   }
                   if (outrageLabelRef.current.handleMouseClick) {
                     window.removeEventListener('click', outrageLabelRef.current.handleMouseClick);
+                    outrageLabelRef.current.handleMouseClick = null;
                   }
                   
                   const baseDamage = 65;
@@ -5662,52 +5730,63 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   setEnemies(updatedEnemies);
                   setTotalDamageDealt(prev => prev + totalOutrageDamage);
                   
-                  // Show blast animation
-                  setOutragePhase('blast');
-                  setShowWhiteout(true);
-                  setOutrageBlastSize(300);
+                  // Skip: do NOT play the blast animation — finish immediately
                   // Clear the scheduled outrage timeout (we're executing now)
                   if (outrageBlastTimeoutRef.current) {
                     clearTimeout(outrageBlastTimeoutRef.current);
                     outrageBlastTimeoutRef.current = null;
                   }
-                  // After animation completes, close UI and end turn
-                        setTimeout(() => {
-                    setShowWhiteout(false);
-                    setShowOutrageUI(false);
-                          setOutrageSkipped(false);
-                          // Clear any pending scheduled outrage blast to avoid double-fire
-                          if (outrageBlastTimeoutRef.current) {
-                            clearTimeout(outrageBlastTimeoutRef.current);
-                            outrageBlastTimeoutRef.current = null;
-                          }
-                    setDualityForm('normal');
-                    setClydeGhoulTurnsLeft(0);
-                    setCharacterMoves(CLYDE_NORMAL_MOVES);
-                    addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
-                    
-                    // Check for defeated enemies
-                    const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
-                    defeated.forEach(e => {
-                      handleEnemyDefeated(e, updatedEnemies);
-                    });
-                    
-                    const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
-                    if (aliveAfter.length === 0) {
-                      addLog(`🏆 All enemies defeated! Victory!`);
-                      setTimeout(() => {
-                        if ([3, 6, 9].includes(currentLevel)) {
-                          setShowInterlude(true);
-                        } else {
-                          setShowRewardScreen(true);
-                        }
-                      }, 1000);
-                    } else {
-                      decrementCooldowns();
-                      setIsPlayerTurn(false);
-                      enemyTurn(updatedEnemies, false, false);
-                    }
-                  }, 1500);
+
+                  // Clear any post-blast cleanup timeout (prevents delayed animation)
+                  if (outragePostBlastTimeoutRef.current) {
+                    clearTimeout(outragePostBlastTimeoutRef.current);
+                    outragePostBlastTimeoutRef.current = null;
+                  }
+
+                  // Ensure input listeners are removed
+                  if (outrageLabelRef.current.handleSpaceKey) {
+                    window.removeEventListener('keydown', outrageLabelRef.current.handleSpaceKey);
+                    outrageLabelRef.current.handleSpaceKey = null;
+                  }
+                  if (outrageLabelRef.current.handleMouseClick) {
+                    window.removeEventListener('click', outrageLabelRef.current.handleMouseClick);
+                    outrageLabelRef.current.handleMouseClick = null;
+                  }
+
+                  // Close UI and reset state immediately
+                      // Reset phase and animation state to avoid playing blast visuals
+                      setOutragePhase('ready');
+                      setOutrageBlastSize(60);
+                      setShowWhiteout(false);
+                      setShowOutrageUI(false);
+                      setOutrageSkipped(false);
+                      outrageSkippedRef.current = false;
+                      setDualityForm('normal');
+                  setClydeGhoulTurnsLeft(0);
+                  setCharacterMoves(CLYDE_NORMAL_MOVES);
+                  addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
+
+                  // Check for defeated enemies
+                  const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
+                  defeated.forEach(e => {
+                    handleEnemyDefeated(e, updatedEnemies);
+                  });
+
+                  const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
+                  if (aliveAfter.length === 0) {
+                    addLog(`🏆 All enemies defeated! Victory!`);
+                    setTimeout(() => {
+                      if ([3, 6, 9].includes(currentLevel)) {
+                        setShowInterlude(true);
+                      } else {
+                        setShowRewardScreen(true);
+                      }
+                    }, 1000);
+                  } else {
+                    decrementCooldowns();
+                    setIsPlayerTurn(false);
+                    enemyTurn(updatedEnemies, false, false);
+                  }
                 }}
                 className="absolute top-6 right-6 z-20 px-6 py-3 bg-red-600/80 hover:bg-red-500 border-2 border-red-400 text-white font-bold rounded-lg pointer-events-auto transition-all"
               >
@@ -6121,9 +6200,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               </button>
 
               <div className="text-center">
-                <h2 className="text-lg sm:text-2xl text-slate-100 tracking-wider uppercase">
-                  Stage {currentStage} - Level {currentLevel}/{currentStage === 1 ? 10 : currentStage === 2 ? 12 : 16}
-                </h2>
+                      <h2 className="text-lg sm:text-2xl text-slate-100 tracking-wider uppercase">
+                        Stage {currentStage} - Level {currentLevel}/{currentStage === 1 ? 10 : currentStage === 2 ? 12 : currentStage === 3 ? 16 : 20}
+                      </h2>
                 {currentLevel === (currentStage === 1 ? 10 : currentStage === 2 ? 12 : 16) && (
                   <p className="text-red-500 text-xs sm:text-sm tracking-widest uppercase mt-1">Boss Fight</p>
                 )}
@@ -6306,19 +6385,40 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   {(playerWeaknessTurns > 0 || playerSpeedDebuffTurns > 0 || playerBurnTurns > 0) && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {playerWeaknessTurns > 0 && (
-                        <div className="px-2 py-1 rounded-lg border border-purple-500/30 bg-purple-900/20 text-[10px] uppercase tracking-widest text-purple-300">
-                          Weakened ({playerWeaknessTurns})
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="px-2 py-1 rounded-lg border border-purple-500/30 bg-purple-900/20 text-[10px] uppercase tracking-widest text-purple-300 cursor-help">
+                              Weakened ({playerWeaknessTurns})
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>
+                            {DEBUFF_DESCRIPTIONS.weakened}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {playerSpeedDebuffTurns > 0 && (
-                        <div className="px-2 py-1 rounded-lg border border-cyan-500/30 bg-cyan-900/20 text-[10px] uppercase tracking-widest text-cyan-300">
-                          Webbed ({playerSpeedDebuffTurns})
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="px-2 py-1 rounded-lg border border-cyan-500/30 bg-cyan-900/20 text-[10px] uppercase tracking-widest text-cyan-300 cursor-help">
+                              Webbed ({playerSpeedDebuffTurns})
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>
+                            {DEBUFF_DESCRIPTIONS.webbed}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                       {playerBurnTurns > 0 && (
-                        <div className="px-2 py-1 rounded-lg border border-orange-500/30 bg-orange-900/20 text-[10px] uppercase tracking-widest text-orange-300">
-                          Burning ({playerBurnTurns})
-                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="px-2 py-1 rounded-lg border border-orange-500/30 bg-orange-900/20 text-[10px] uppercase tracking-widest text-orange-300 cursor-help">
+                              Burning ({playerBurnTurns})
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent sideOffset={6}>
+                            {DEBUFF_DESCRIPTIONS.burning}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
                     </div>
                   )}
@@ -6764,10 +6864,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                             turtle_shell: '🐢 Turtle Shell',
                           };
                           return (
-                            <div key={artifactId} className="text-xs text-yellow-300 bg-yellow-900/20 border border-yellow-600/20 px-3 py-1.5 rounded-lg flex justify-between items-center">
-                              <span>{artifactNames[artifactId] || artifactId}</span>
-                              {count > 1 && <span className="text-yellow-500 font-bold">x{count}</span>}
-                            </div>
+                            <Tooltip key={artifactId}>
+                              <TooltipTrigger asChild>
+                                <div className="text-xs text-yellow-300 bg-yellow-900/20 border border-yellow-600/20 px-3 py-1.5 rounded-lg flex justify-between items-center cursor-help">
+                                  <span>{artifactNames[artifactId] || artifactId}</span>
+                                  {count > 1 && <span className="text-yellow-500 font-bold">x{count}</span>}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent sideOffset={6}>
+                                {ARTIFACT_DESCRIPTIONS[artifactId] || 'No description available.'}
+                              </TooltipContent>
+                            </Tooltip>
                           );
                         })}
                       </div>

@@ -6,6 +6,9 @@ export interface Enemy {
   attack: number;
   defense: number;
   baseDamage: number;
+  traitId?: string;
+  traitName?: string;
+  traitDescription?: string;
 }
 
 export interface LevelData {
@@ -236,7 +239,7 @@ export const STAGE_2_LEVELS: Record<number, LevelData> = {
         type: 'ENEMY',
         maxHealth: 200,
         attack: 30,
-        defense: 20,
+        defense: 170,
         baseDamage: 32,
       },
     ],
@@ -270,8 +273,8 @@ export const STAGE_2_LEVELS: Record<number, LevelData> = {
         name: 'Void Golem',
         type: 'ENEMY',
         maxHealth: 300,
-        attack: 40,
-        defense: 40,
+        attack: 240,
+        defense: 240,
         baseDamage: 35,
       },
     ],
@@ -388,8 +391,8 @@ export const STAGE_2_LEVELS: Record<number, LevelData> = {
         name: 'Lord Inferno',
         type: 'BOSS',
         maxHealth: 300,
-        attack: 120,
-        defense: 120,
+        attack: 180,
+        defense: 270,
         baseDamage: 40,
       },
     ],
@@ -405,8 +408,8 @@ export const STAGE_3_LEVELS: Record<number, LevelData> = {
         name: 'Lava Golem',
         type: 'ENEMY',
         maxHealth: 300,
-        attack: 55,
-        defense: 182,
+        attack: 255,
+        defense: 382,
         baseDamage: 40,
       },
     ],
@@ -564,8 +567,8 @@ export const STAGE_3_LEVELS: Record<number, LevelData> = {
         name: 'Lava Golem',
         type: 'ENEMY',
         maxHealth: 300,
-        attack: 55,
-        defense: 182,
+        attack: 255,
+        defense: 382,
         baseDamage: 40,
       },
       {
@@ -573,8 +576,8 @@ export const STAGE_3_LEVELS: Record<number, LevelData> = {
         name: 'Lava Golem',
         type: 'ENEMY',
         maxHealth: 300,
-        attack: 55,
-        defense: 182,
+        attack: 255,
+        defense: 382,
         baseDamage: 40,
       },
     ],
@@ -746,6 +749,27 @@ export const STAGE_3_LEVELS: Record<number, LevelData> = {
       },
     ],
   },
+};
+
+// Stage 4: Fairy Forest (20 levels planned). Start with Level 1: Moss Golem
+export const STAGE_4_LEVELS: Record<number, LevelData> = {
+  1: {
+    enemies: [
+      {
+        id: 'moss_golem_1',
+        name: 'Moss Golem',
+        type: 'ENEMY',
+        maxHealth: 800,
+        attack: 400,
+        defense: 620,
+        baseDamage: 40,
+        traitId: 'dangerous_smell',
+        traitName: 'Dangerous Smell',
+        traitDescription: '30% chance to inflict poison on hit. 10% of those poisons are lethal: deals 8% of your max HP per turn.',
+      },
+    ],
+  },
+  // Remaining levels will be filled in later
 };
 
 // Get emoji for enemy type

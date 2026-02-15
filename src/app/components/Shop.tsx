@@ -1,5 +1,5 @@
 import { Coins, ShoppingBag, X, Heart, Zap, Shield, Sword, Apple, Sandwich, Droplet, Sparkles, Skull } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MoveShop } from './MoveShop';
 import { Move } from './MoveSelection';
@@ -14,7 +14,7 @@ interface ShopItem {
   type: 'consumable' | 'permanent' | 'artifact';
 }
 
-const SHOP_ITEMS: ShopItem[] = [
+const BASE_SHOP_ITEMS: ShopItem[] = [
   // Consumables
   {
     id: 'apple',
@@ -80,6 +80,41 @@ const SHOP_ITEMS: ShopItem[] = [
     price: 18,
     icon: Shield,
     type: 'permanent',
+  },
+];
+
+const STAGE4_SHOP_ITEMS: ShopItem[] = [
+  {
+    id: 'pixie_dust',
+    name: 'Pixie Dust',
+    description: 'Heal 45 HP',
+    price: 8,
+    icon: Sparkles,
+    type: 'consumable',
+  },
+  {
+    id: 'medicinal_herbs',
+    name: 'Medicinal Herbs',
+    description: 'Heal 60 HP',
+    price: 14,
+    icon: Droplet,
+    type: 'consumable',
+  },
+  {
+    id: 'big_health_potion',
+    name: 'Big Health Potion',
+    description: 'Heal 100 HP',
+    price: 30,
+    icon: Heart,
+    type: 'consumable',
+  },
+  {
+    id: 'antidote',
+    name: 'Antidote',
+    description: 'Cures poison',
+    price: 120,
+    icon: Skull,
+    type: 'consumable',
   },
 ];
 
@@ -151,17 +186,33 @@ interface ShopProps {
 export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, playerAttack, playerDefense, currentStage, heroId, onPurchase, onPurchaseMove, onClose }: ShopProps) {
   const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
   const isIllegalShop = heroId === 'dearborn';
-  const shopItems = isIllegalShop ? [...SHOP_ITEMS, ...ILLEGAL_SHOP_ITEMS] : SHOP_ITEMS;
-  const discountedIds = useMemo(() => {
-    if (!isIllegalShop) return new Set<string>();
-    const ids = [...SHOP_ITEMS, ...ILLEGAL_SHOP_ITEMS].map(item => item.id);
-    if (ids.length <= 2) return new Set(ids);
-    for (let i = ids.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [ids[i], ids[j]] = [ids[j], ids[i]];
+  let shopItems: ShopItem[];
+  if (isIllegalShop) {
+    shopItems = [...BASE_SHOP_ITEMS, ...ILLEGAL_SHOP_ITEMS];
+  } else if (currentStage >= 4) {
+    shopItems = [
+      ...STAGE4_SHOP_ITEMS,
+      // Permanent upgrades
+      ...BASE_SHOP_ITEMS.filter(i => i.type === 'permanent'),
+    ];
+  } else {
+    shopItems = BASE_SHOP_ITEMS;
+  }
+  // Stable discount selection for illegal shop
+  const discountRef = useRef<Set<string> | null>(null);
+  if (isIllegalShop && discountRef.current === null) {
+    const ids = [...shopItems].map(item => item.id);
+    if (ids.length <= 2) {
+      discountRef.current = new Set(ids);
+    } else {
+      for (let i = ids.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ids[i], ids[j]] = [ids[j], ids[i]];
+      }
+      discountRef.current = new Set(ids.slice(0, 2));
     }
-    return new Set(ids.slice(0, 2));
-  }, [isIllegalShop]);
+  }
+  const discountedIds = isIllegalShop ? (discountRef.current ?? new Set<string>()) : new Set<string>();
 
   return (
     <div className="size-full bg-slate-950 flex items-center justify-center p-4 sm:p-6 overflow-hidden relative">
@@ -267,7 +318,7 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                   const discounted = discountedIds.has(item.id);
                   const finalPrice = discounted ? Math.max(1, Math.floor(item.price * 0.7)) : item.price;
                   const canAfford = gold >= finalPrice;
-                  const statCap = currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
+                  const statCap = currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
                   const isCapped = item.id === 'attack_upgrade' ? playerAttack >= statCap : item.id === 'defense_upgrade' ? playerDefense >= statCap : false;
                   const isClydeForbidden = item.id === 'attack_upgrade' && heroId === 'clyde';
                   const canPurchase = canAfford && !isCapped && !isClydeForbidden;
@@ -389,7 +440,7 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                             })()}
                           </div>
                           {(() => {
-                            const statCap = currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
+                            const statCap = currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
                             const currentIsCapped = hoveredItem.id === 'attack_upgrade' ? playerAttack >= statCap : hoveredItem.id === 'defense_upgrade' ? playerDefense >= statCap : false;
                             const discounted = discountedIds.has(hoveredItem.id);
                             const finalPrice = discounted ? Math.max(1, Math.floor(hoveredItem.price * 0.7)) : hoveredItem.price;

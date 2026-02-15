@@ -169,6 +169,14 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
                   {enemy.name}
                 </h4>
 
+                {/* Generic Trait UI (for new stage 4 enemies) */}
+                {enemy.traitName && !['Lava Pebble','Lava Golem','Mother Golem','Lava Dragon','Lava Spider','Fire Lizard'].includes(enemy.name) && (
+                  <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-900/20 px-2 py-1">
+                    <p className="text-[10px] text-emerald-300 uppercase tracking-widest font-bold">Trait: {enemy.traitName}</p>
+                    <p className="text-[9px] text-slate-300 italic">{enemy.traitDescription || ''}</p>
+                  </div>
+                )}
+
                 {enemy.name === 'Lava Pebble' && (
                   <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
                     <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Scorch</p>
