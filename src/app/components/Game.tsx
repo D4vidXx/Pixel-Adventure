@@ -87,7 +87,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       maybeApplyBeerBoost();
     };
     return () => {
-      try { delete (window as any).__forceBeerTest; } catch (e) {}
+      try { delete (window as any).__forceBeerTest; } catch (e) { }
     };
   }, [maybeApplyBeerBoost]);
   const startingGold = hasEquipment('chinese_waving_cat') ? 100 : 0;
@@ -360,7 +360,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     + (hasEquipment('blood_vile') ? 5 : 0);
   const totalCritChance = Math.min(100, baseCritChance + itemCritChance);
   const activeDisabledMoveId = entrapmentTurns > 0 ? entrapmentMoveId : disabledMoveId;
-  
+
   // Clyde Ghoul Form: Convert all defense to attack (×2)
   let ghoulFormAttack = finalAttack;
   let ghoulFormDefense = finalDefense;
@@ -368,7 +368,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     ghoulFormAttack = finalAttack + (finalDefense * 2);
     ghoulFormDefense = 0;
   }
-  
+
   // Use the appropriate stats based on form
   const attackToUse = ghoulFormAttack;
   const defenseToUse = ghoulFormDefense;
@@ -377,7 +377,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     finalDefenseRef.current = finalDefense;
     attackToUseRef.current = attackToUse;
   }, [finalAttack, finalDefense, attackToUse]);
-  
+
   const resourceType = hero.resourceType;
 
   // Get hero's moveset (including owned special moves)
@@ -599,14 +599,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     const animate = () => {
       shakeAnimationTime.current += 16; // ~60fps
-      
+
       // Use sine waves with different frequencies for smooth, organic motion
       const x = Math.sin(shakeAnimationTime.current / 100) * (screenShakeIntensity * 0.6);
       const y = Math.sin(shakeAnimationTime.current / 140 + 1) * (screenShakeIntensity * 0.6);
-      
+
       setShakeOffsetX(x);
       setShakeOffsetY(y);
-      
+
       shakeAnimationFrameId.current = requestAnimationFrame(animate);
     };
 
@@ -666,12 +666,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       const healAmount = 20;
       let newHealth = playerHealth + healAmount;
       let shieldGain = 0;
-      
+
       if (newHealth > maxPlayerHealth) {
         shieldGain = newHealth - maxPlayerHealth;
         newHealth = maxPlayerHealth;
       }
-      
+
       setPlayerHealth(newHealth);
       if (shieldGain > 0) {
         setPlayerShield(prev => prev + shieldGain);
@@ -1577,13 +1577,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 }
                 return e;
               });
-              
+
               // Check for kills and victory
               const justKilled = updated.filter(e => e.currentHealth === 0);
               justKilled.forEach(enemy => {
                 handleEnemyDefeated(enemy, updated);
               });
-              
+
               const stillAlive = updated.filter(e => e.currentHealth > 0);
               if (stillAlive.length === 0) {
                 addLog(`🏆 All enemies defeated by Ice Storm! Victory!`);
@@ -1595,7 +1595,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   }
                 }, 1000);
               }
-              
+
               return updated;
             });
             addLog(`❄️ ${enemy.name} takes ${iceDamage} ice storm damage! (${Math.max(0, enemy.iceStormTurns - 1)} turn${Math.max(0, enemy.iceStormTurns - 1) !== 1 ? 's' : ''} remaining)`);
@@ -1766,7 +1766,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
 
             const defenseForDamage = defenseToUse;
-            
+
             // Determine if using Giant Spear or normal attack
             let baseDamageForAttack = isUsingGiantSpear ? 35 : enemy.baseDamage;
             let magicBurstWeaknessChance = 0;
@@ -1895,8 +1895,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
               // Passive: Righteous Fury (Lyanna) - 20% chance to burn enemy when they attack
               if (hero.uniqueAbility?.id === 'righteous_fury' && Math.random() < 0.20) {
-                setEnemies(prev => prev.map(e => 
-                  e.id === enemy.id 
+                setEnemies(prev => prev.map(e =>
+                  e.id === enemy.id
                     ? { ...e, burnTurns: 3 }
                     : e
                 ));
@@ -1906,8 +1906,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               // Lord Inferno lifesteal (12% default, 50% when desperate)
               if (enemy.name === 'Lord Inferno' && damageToHealth > 0) {
                 const lifestealed = Math.floor(damageToHealth * lifestealePercent);
-                setEnemies(prev => prev.map(e => 
-                  e.name === 'Lord Inferno' 
+                setEnemies(prev => prev.map(e =>
+                  e.name === 'Lord Inferno'
                     ? { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + lifestealed) }
                     : e
                 ));
@@ -1981,8 +1981,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                     // Apply lifesteal for chained attack
                     if (enemy.name === 'Lord Inferno' && chainDamage > 0) {
                       const chainLifestealed = Math.floor(chainDamage * lifestealePercent);
-                      setEnemies(prev => prev.map(e => 
-                        e.name === 'Lord Inferno' 
+                      setEnemies(prev => prev.map(e =>
+                        e.name === 'Lord Inferno'
                           ? { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + chainLifestealed) }
                           : e
                       ));
@@ -3133,7 +3133,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Clyde Move: OUTRAGE (Space key spam mechanic with epic visual effects)
     if (move.id === 'outrage') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      
+
       // Start OUTRAGE sequence
       setShowOutrageUI(true);
       setOutragePhase('ready');
@@ -3145,17 +3145,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setOutrageSkipped(false);
       outrageSkippedRef.current = false;
       outrageExecutedRef.current = false;
-      
+
       // 1 second delay before countdown starts
       setTimeout(() => {
         setOutragePhase('countdown');
         let countdown = 3;
-        
+
         // Countdown timer (3, 2, 1)
         outrageCountdownIntervalRef.current = window.setInterval(() => {
           countdown--;
           setOutrageCountdown(countdown);
-          
+
           if (countdown === 0) {
             if (outrageCountdownIntervalRef.current) {
               clearInterval(outrageCountdownIntervalRef.current);
@@ -3166,45 +3166,45 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               return;
             }
             setOutragePhase('spam');
-            
+
             // Now handle space key and mouse click spam for 10 seconds
             let spaceCount = 0;
             const spamStartTime = Date.now();
-            
+
             const handleInput = () => {
               if (outrageSkippedRef.current) return;
               const elapsed = Date.now() - spamStartTime;
               if (elapsed < 10000) {
                 spaceCount++;
                 setOutrageSpaceCount(spaceCount);
-                
+
                 // Increase blast size and screen shake with each press
                 const blastIncrease = 8 + (spaceCount * 0.5);
                 setOutrageBlastSize(prev => Math.min(500, prev + blastIncrease));
-                
+
                 // Screen shake intensity increases with spam
                 const shakeIntensity = Math.min(15, spaceCount * 0.3);
                 setScreenShakeIntensity(shakeIntensity);
               }
             };
-            
+
             const handleSpaceKey = (e: KeyboardEvent) => {
               if (e.code === 'Space') {
                 e.preventDefault();
                 handleInput();
               }
             };
-            
+
             const handleMouseClick = () => {
               handleInput();
             };
-            
+
             // Store handlers in ref so skip button can remove them
             outrageLabelRef.current = { handleSpaceKey, handleMouseClick };
-            
+
             window.addEventListener('keydown', handleSpaceKey);
             window.addEventListener('click', handleMouseClick);
-            
+
             // After 10 seconds, execute the blast
             outrageBlastTimeoutRef.current = window.setTimeout(() => {
               // If the player already skipped or we've already executed, don't run the scheduled blast
@@ -3217,7 +3217,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               window.removeEventListener('keydown', handleSpaceKey);
               window.removeEventListener('click', handleMouseClick);
               setOutragePhase('blast');
-              
+
               // Calculate final damage
               const baseDamage = Math.max(0, spaceCount);
               const critRoll = rollD20(true);
@@ -3255,7 +3255,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 }
                 return e;
               });
-              
+
               setEnemies(updatedEnemies);
               setTotalDamageDealt(prev => prev + totalOutrageDamage);
               if (outrageDamageEntries.length > 0) {
@@ -3277,30 +3277,30 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   return newCount;
                 });
               }
-              
+
               // White-out effect
               setShowWhiteout(true);
               setScreenShakeIntensity(0);
-              
+
               // Return to normal form after ghoul turn (only 1 turn in ghoul form)
               outragePostBlastTimeoutRef.current = window.setTimeout(() => {
                 // clear ref (we're executing)
                 outragePostBlastTimeoutRef.current = null;
                 setShowWhiteout(false);
-                  setShowOutrageUI(false);
-                  setOutrageSkipped(false);
-                  outrageSkippedRef.current = false;
-                  setDualityForm('normal');
+                setShowOutrageUI(false);
+                setOutrageSkipped(false);
+                outrageSkippedRef.current = false;
+                setDualityForm('normal');
                 setClydeGhoulTurnsLeft(0);
                 setCharacterMoves(CLYDE_NORMAL_MOVES);
                 addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
-                
+
                 // Check for victory
                 const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
                 defeated.forEach(e => {
                   handleEnemyDefeated(e, updatedEnemies);
                 });
-                
+
                 const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
                 if (aliveAfter.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
@@ -3321,7 +3321,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           }
         }, 1000); // Countdown every 1 second
       }, 1000); // Initial 1 second delay
-      
+
       setIsPlayerTurn(false);
       return;
     }
@@ -3366,16 +3366,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         return;
       }
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      
+
       // Transform to ghoul form
       setDualityForm('ghoul');
       setDualityMeter(0);
       setClydeGhoulTurnsLeft(1); // Only 1 turn in ghoul form
       setCharacterMoves(CLYDE_GHOUL_MOVES);
-      
+
       addLog(`💀 TRANSFORMATION! Clyde becomes a GHOUL! (1 turn only)`);
       addLog(`⚔️ All Defense converts to Attack (×2)!`);
-      
+
       decrementCooldowns();
       setIsPlayerTurn(false);
       enemyTurn(undefined, false, false);
@@ -3546,10 +3546,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         }
         const damageAmount = move.baseDamage || 30;
         const tideCallEmpowered = tideCallActive;
-        
+
         const randomEffectChance = move.randomEffectChance || 15;
         const shouldApplyEffect = Math.random() * 100 < randomEffectChance;
-        
+
         addLog(`⛈️ Weather Ball unleashed! (-${move.cost} Mana)`);
         if (tideCallEmpowered) {
           addLog(`🌊 Tide Call empowers your attack!`);
@@ -3617,7 +3617,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         if (tideCallEmpowered) {
           consumeTideCall();
         }
-        
+
         setTimeout(() => {
           const justKilled = updated.filter(e => e.currentHealth === 0);
           justKilled.forEach(enemy => handleEnemyDefeated(enemy, updated));
@@ -3649,9 +3649,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`❌ No valid target!`);
           return;
         }
-        
+
         if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-        
+
         const critRoll = rollD20(true);
         const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
         const isCritical = critRoll === 20 || darkPactCrit || consumeGuaranteedCrit();
@@ -3660,9 +3660,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           maybeApplyBeerBoost();
         }
         if (darkPactCrit) addLog(`💀 Dark Pact activated! Guaranteed critical hit!`);
-        
+
         let damageAmount = move.baseDamage || 10;
-        
+
         let damage: number;
         if (isCritical && move.critDamageMultiplier) {
           const baseDamage = calculateDamage(damageAmount, attackToUse, target.defense);
@@ -3678,7 +3678,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
         setLastMoveIdByEnemy(prev => ({ ...prev, [target.id]: move.id }));
         lastMoveIdByEnemyRef.current = { ...lastMoveIdByEnemyRef.current, [target.id]: move.id };
-        
+
         applyBloodVileLifesteal(damage, isCritical);
         maybeTriggerSharpRazor(isCritical);
         addLog(`🔓 Iron Cage! ${isCritical ? `CRITICAL HIT (x${move.critDamageMultiplier})! ` : ''}Dealt ${damage} damage to ${target.name}!`);
@@ -3728,14 +3728,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           return;
         }
         if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-        
+
         const baseDamagePerTurn = 16; // 80 / 5
         const totalTurns = 5;
         let totalInitialDamage = 0;
         const aliveEnemyCount = enemies.filter(e => e.currentHealth > 0).length;
-        
+
         addLog(`❄️ Ice Storm summoned! All enemies will take scaling damage for ${totalTurns} turns! (-${move.cost} Mana)`);
-        
+
         // Apply initial damage with proper scaling (first hit counts as player turn)
         // Calculate damage FIRST before applying
         const nextLastMoveIds = { ...lastMoveIdByEnemyRef.current };
@@ -3753,7 +3753,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
         setLastMoveIdByEnemy(nextLastMoveIds);
         lastMoveIdByEnemyRef.current = nextLastMoveIds;
-        
+
         // Now apply the damage with the calculated values
         setEnemies(prev => {
           const updated = prev.map(enemy => {
@@ -3779,7 +3779,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               return newCount;
             });
           }
-          
+
           // Check for victory after Ice Storm damage
           setTimeout(() => {
             const stillAlive = updated.filter(e => e.currentHealth > 0);
@@ -3794,10 +3794,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               }, 1000);
             }
           }, 100);
-          
+
           return updated;
         });
-        
+
         addLog(`❄️ Turn 1/5: Ice Storm deals ${Math.ceil(totalInitialDamage / (aliveEnemyCount || 1))} damage to all enemies!`);
         setTotalDamageDealt(prev => prev + totalInitialDamage);
         consumePlayerWeaknessTurn();
@@ -4057,7 +4057,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (isNaturalCrit) {
         addLog('[DEBUG] Player natural crit detected in main attack flow');
       }
-      
+
       // Check for guaranteed critical hit conditions
       const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
       const isCritical = isNaturalCrit || guaranteedGunslingerCrit || darkPactCrit || consumeGuaranteedCrit();
@@ -4287,7 +4287,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
         if (originallyAlive.length > 0 && updatedEnemies.find(e => e.id === target.id)?.currentHealth === 0) {
           handleEnemyDefeated(target, updatedEnemies);
-          
+
           // Aldric's Passive: Killing a non-minion enemy ends the turn immediately
           if (hero.id === 'aldric' && target.type !== 'MINION') {
             const aliveEnemies = updatedEnemies.filter(e => e.currentHealth > 0);
@@ -4310,7 +4310,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         } else if (!aliveEnemies.find(e => e.id === selectedTargetId)) {
           setSelectedTargetId(aliveEnemies[0].id);
         }
-        
+
         consumePlayerWeaknessTurn();
         // For Aldric killing an enemy, end the turn without enemy response
         if (aldricKilledEnemy) {
@@ -4425,7 +4425,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // For all attack moves (single-target), the turn ending is handled in the setTimeout above to prevent double calls
     // For buff/utility moves, end the turn normally here
-    if (move.type !== 'attack' || move.id === 'health_tonic')  {
+    if (move.type !== 'attack' || move.id === 'health_tonic') {
       consumePlayerWeaknessTurn();
       decrementCooldowns();
 
@@ -4532,69 +4532,69 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     const isSmuggledGoods = item.id === 'sugarcane' || item.id === 'rum' || item.id === 'rope' || item.id === 'pirates_ship';
     if (!isSmuggledGoods) {
       if (item.type === 'healing' && item.healAmount !== undefined) {
-      let actualHealAmt = item.healAmount;
-      if (item.id === 'apple') actualHealAmt = 16;
-      if (item.id === 'bread') actualHealAmt = 24;
-      if (item.id === 'health_potion') actualHealAmt = 42;
+        let actualHealAmt = item.healAmount;
+        if (item.id === 'apple') actualHealAmt = 16;
+        if (item.id === 'bread') actualHealAmt = 24;
+        if (item.id === 'health_potion') actualHealAmt = 42;
 
-      const actualHeal = Math.min(actualHealAmt, maxPlayerHealth - playerHealth);
-      setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + actualHealAmt));
-      addLog(`💚 Used ${item.name}! Restored ${actualHeal} HP!`);
+        const actualHeal = Math.min(actualHealAmt, maxPlayerHealth - playerHealth);
+        setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + actualHealAmt));
+        addLog(`💚 Used ${item.name}! Restored ${actualHeal} HP!`);
       } else if (item.type === 'restore' && item.resourceRestore !== undefined) {
-      if (hero.classId === 'gunslinger') {
-        const bulletsRestore = Math.floor(item.resourceRestore / 10);
+        if (hero.classId === 'gunslinger') {
+          const bulletsRestore = Math.floor(item.resourceRestore / 10);
 
-        if (bulletsRestore > 0) {
-          const actualRestore = Math.min(bulletsRestore, maxPlayerResource - playerResource);
-          setPlayerResource(prev => Math.min(maxPlayerResource, prev + bulletsRestore));
-          addLog(`✨ Used ${item.name}! Restored ${actualRestore} Bullets!`);
+          if (bulletsRestore > 0) {
+            const actualRestore = Math.min(bulletsRestore, maxPlayerResource - playerResource);
+            setPlayerResource(prev => Math.min(maxPlayerResource, prev + bulletsRestore));
+            addLog(`✨ Used ${item.name}! Restored ${actualRestore} Bullets!`);
+          } else {
+            addLog(`❌ This item doesn't restore enough energy for a bullet!`);
+          }
         } else {
-          addLog(`❌ This item doesn't restore enough energy for a bullet!`);
+          const actualRestore = Math.min(item.resourceRestore, maxPlayerResource - playerResource);
+          setPlayerResource(prev => Math.min(maxPlayerResource, prev + item.resourceRestore!));
+          addLog(`✨ Used ${item.name}! Restored ${actualRestore} ${resourceType}!`);
         }
-      } else {
-        const actualRestore = Math.min(item.resourceRestore, maxPlayerResource - playerResource);
-        setPlayerResource(prev => Math.min(maxPlayerResource, prev + item.resourceRestore!));
-        addLog(`✨ Used ${item.name}! Restored ${actualRestore} ${resourceType}!`);
-      }
       } else if (item.type === 'buff') {
-      if (item.attackBoost !== undefined) {
-        if (hero.id === 'clyde') {
-          addLog(`❌ Clyde cannot gain attack! His defense converts to attack in Ghoul form.`);
-          // Return item to inventory since we're not using it
-          setInventory(prev => ({
-            ...prev,
-            [item.id]: prev[item.id] + 1,
-          }));
+        if (item.attackBoost !== undefined) {
+          if (hero.id === 'clyde') {
+            addLog(`❌ Clyde cannot gain attack! His defense converts to attack in Ghoul form.`);
+            // Return item to inventory since we're not using it
+            setInventory(prev => ({
+              ...prev,
+              [item.id]: prev[item.id] + 1,
+            }));
+            return;
+          }
+          setPlayerAttack(prev => {
+            const totalAtk = prev + permanentUpgrades.attackBonus;
+            const statCap = getStatCap();
+            if (totalAtk >= statCap) return prev;
+            return Math.min(statCap - permanentUpgrades.attackBonus, prev + item.attackBoost!);
+          });
+          addLog(`⚔️ Used ${item.name}! Attack increased!`);
+        }
+        if (item.defenseBoost !== undefined) {
+          setPlayerDefense(prev => {
+            const totalDef = prev + permanentUpgrades.defenseBonus;
+            const statCap = getStatCap();
+            if (totalDef >= statCap) return prev;
+            return Math.min(statCap - permanentUpgrades.defenseBonus, prev + item.defenseBoost!);
+          });
+          addLog(`🛡️ Used ${item.name}! Defense increased!`);
+        }
+      } else if (item.type === 'debuff' && item.weaknessDebuff) {
+        const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
+        if (aliveEnemies.length === 0) {
+          addLog(`❌ No enemies alive!`);
           return;
         }
-        setPlayerAttack(prev => {
-          const totalAtk = prev + permanentUpgrades.attackBonus;
-          const statCap = getStatCap();
-          if (totalAtk >= statCap) return prev;
-          return Math.min(statCap - permanentUpgrades.attackBonus, prev + item.attackBoost!);
-        });
-        addLog(`⚔️ Used ${item.name}! Attack increased!`);
+        setEnemies(prev => prev.map(e =>
+          e.currentHealth > 0 ? { ...e, weaknessTurns: 3 } : e
+        ));
+        addLog(`💀 Used ${item.name}! ALL enemies weakened — damage reduced by 20% for 3 turns!`);
       }
-      if (item.defenseBoost !== undefined) {
-        setPlayerDefense(prev => {
-          const totalDef = prev + permanentUpgrades.defenseBonus;
-          const statCap = getStatCap();
-          if (totalDef >= statCap) return prev;
-          return Math.min(statCap - permanentUpgrades.defenseBonus, prev + item.defenseBoost!);
-        });
-        addLog(`🛡️ Used ${item.name}! Defense increased!`);
-      }
-      } else if (item.type === 'debuff' && item.weaknessDebuff) {
-      const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
-      if (aliveEnemies.length === 0) {
-        addLog(`❌ No enemies alive!`);
-        return;
-      }
-      setEnemies(prev => prev.map(e =>
-        e.currentHealth > 0 ? { ...e, weaknessTurns: 3 } : e
-      ));
-      addLog(`💀 Used ${item.name}! ALL enemies weakened — damage reduced by 20% for 3 turns!`);
-    }
     }
 
     // Using an item now ends your turn
@@ -4835,7 +4835,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   // --- Wolfgang Handlers ---
   const handleRhythmComplete = (score: number, total: number, perfectCount: number) => {
     setShowRhythmGame(false);
-    
+
     // Check if this was a skip (score === 25)
     if (score === 25) {
       addLog(`⏭️ Skipped Symphony! Got 25 notes and +10 Shield!`);
@@ -4844,7 +4844,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     } else {
       addLog(`🎼 Symphony Complete! Score: ${score}/${total} (Perfects: ${perfectCount})`);
     }
-    
+
     // Delay to ensure UI updates properly before ending turn
     setTimeout(() => {
       decrementCooldowns();
@@ -5313,7 +5313,27 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }
 
   // Show rest screen if active
-
+  if (showRest) {
+    const healAmount = Math.floor(maxPlayerHealth * 0.5);
+    return (
+      <div className="size-full bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1),rgba(2,6,23,1))]" />
+        <div className="relative z-10 max-w-lg w-full text-center">
+          <h2 className="text-5xl font-black bg-gradient-to-r from-blue-300 via-blue-100 to-blue-300 bg-clip-text text-transparent tracking-widest uppercase mb-6">
+            Rest Area
+          </h2>
+          <p className="text-slate-300 text-lg mb-2">You settle down and recover your strength.</p>
+          <p className="text-blue-400 text-2xl font-bold mb-8">💚 +{healAmount} HP</p>
+          <button
+            onClick={handleRest}
+            className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg rounded-2xl border-2 border-blue-400 transition-all shadow-lg shadow-blue-900/50"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (showRhythmGame) {
     return (
@@ -5325,21 +5345,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       />
     );
   }
-  
+
   // If the player was defeated, render the Lose screen
   if (showLoseScreen) {
-          return (
-            <LoseScreen
-              damageDealt={totalDamageDealt}
-              damageTaken={totalDamageTaken}
-              goldAccumulated={totalGoldEarned}
-              legendaryArtifacts={artifacts}
-              onTryAgain={handleTryAgain}
-              onReturnToMenu={handleReturnToMenu}
-              combatLog={combatLog}
-            />
-          );
-        }
+    return (
+      <LoseScreen
+        damageDealt={totalDamageDealt}
+        damageTaken={totalDamageTaken}
+        goldAccumulated={totalGoldEarned}
+        legendaryArtifacts={artifacts}
+        onTryAgain={handleTryAgain}
+        onReturnToMenu={handleReturnToMenu}
+        combatLog={combatLog}
+      />
+    );
+  }
 
   // Show reward screen if active
   if (showRewardScreen) {
@@ -5377,7 +5397,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }
 
   return (
-    <div 
+    <div
       className={`size-full flex flex-col relative overflow-hidden transition-colors duration-1000 ${currentStage === 2 ? 'bg-neutral-950' : 'bg-slate-900'}`}
       style={{
         transform: `translate(${shakeOffsetX}px, ${shakeOffsetY}px)`
@@ -5687,7 +5707,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                     window.removeEventListener('click', outrageLabelRef.current.handleMouseClick);
                     outrageLabelRef.current.handleMouseClick = null;
                   }
-                  
+
                   const baseDamage = 65;
                   const critRoll = rollD20(true);
                   const isCritical = critRoll === 20;
@@ -5729,7 +5749,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
                   setEnemies(updatedEnemies);
                   setTotalDamageDealt(prev => prev + totalOutrageDamage);
-                  
+
                   // Skip: do NOT play the blast animation — finish immediately
                   // Clear the scheduled outrage timeout (we're executing now)
                   if (outrageBlastTimeoutRef.current) {
@@ -5754,14 +5774,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   }
 
                   // Close UI and reset state immediately
-                      // Reset phase and animation state to avoid playing blast visuals
-                      setOutragePhase('ready');
-                      setOutrageBlastSize(60);
-                      setShowWhiteout(false);
-                      setShowOutrageUI(false);
-                      setOutrageSkipped(false);
-                      outrageSkippedRef.current = false;
-                      setDualityForm('normal');
+                  // Reset phase and animation state to avoid playing blast visuals
+                  setOutragePhase('ready');
+                  setOutrageBlastSize(60);
+                  setShowWhiteout(false);
+                  setShowOutrageUI(false);
+                  setOutrageSkipped(false);
+                  outrageSkippedRef.current = false;
+                  setDualityForm('normal');
                   setClydeGhoulTurnsLeft(0);
                   setCharacterMoves(CLYDE_NORMAL_MOVES);
                   addLog(`💀 Ghoul form ended! Clyde returned to normal form!`);
@@ -6200,9 +6220,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               </button>
 
               <div className="text-center">
-                      <h2 className="text-lg sm:text-2xl text-slate-100 tracking-wider uppercase">
-                        Stage {currentStage} - Level {currentLevel}/{currentStage === 1 ? 10 : currentStage === 2 ? 12 : currentStage === 3 ? 16 : 20}
-                      </h2>
+                <h2 className="text-lg sm:text-2xl text-slate-100 tracking-wider uppercase">
+                  Stage {currentStage} - Level {currentLevel}/{currentStage === 1 ? 10 : currentStage === 2 ? 12 : currentStage === 3 ? 16 : 20}
+                </h2>
                 {currentLevel === (currentStage === 1 ? 10 : currentStage === 2 ? 12 : 16) && (
                   <p className="text-red-500 text-xs sm:text-sm tracking-widest uppercase mt-1">Boss Fight</p>
                 )}
@@ -6232,11 +6252,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                       rotate: [0, -2, 2, -2, 2, 0]
                     }}
                     transition={{ duration: 0.5 }}
-                    className={`w-36 h-36 sm:w-48 sm:h-48 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden ${
-                      dualityMeter === 4 && hero.id === 'clyde'
+                    className={`w-36 h-36 sm:w-48 sm:h-48 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden ${dualityMeter === 4 && hero.id === 'clyde'
                         ? 'border-2 animate-pulse shadow-lg shadow-blue-500/60 relative'
                         : 'border-2 border-slate-600/50 shadow-lg shadow-slate-900/50'
-                    }`}
+                      }`}
                   >
                     {/* Blue Fire Border Animation when full */}
                     {dualityMeter === 4 && hero.id === 'clyde' && (
@@ -6680,7 +6699,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                       <div className="bg-gradient-to-b from-slate-900/60 to-slate-950/60 p-4 rounded-lg border border-blue-900/40 shadow-lg relative overflow-hidden">
                         {/* Background glow effect - Blue mystical */}
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-blue-600/15 blur-3xl -mt-20 pointer-events-none" />
-                        
+
                         <div className="relative z-10">
                           <div className="flex justify-between items-center mb-3">
                             <p className="text-[10px] text-blue-400 uppercase tracking-widest font-bold flex items-center gap-2">
@@ -6693,11 +6712,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                           </div>
 
                           {/* Ghoul Sword Symbols Container */}
-                          <div className={`flex gap-3 justify-center ${
-                            dualityMeter === 4
+                          <div className={`flex gap-3 justify-center ${dualityMeter === 4
                               ? 'relative'
                               : ''
-                          }`}>
+                            }`}>
                             {/* Intense glow aura when fully charged */}
                             {dualityMeter === 4 && (
                               <motion.div
@@ -6718,22 +6736,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                               <div key={i} className="relative z-10">
                                 {/* Mystical glow for active swords */}
                                 {i <= dualityMeter && (
-                                  <div className={`absolute inset-0 scale-130 animate-pulse ${
-                                    dualityMeter === 4
+                                  <div className={`absolute inset-0 scale-130 animate-pulse ${dualityMeter === 4
                                       ? 'blur-2xl bg-blue-600/50'
                                       : 'blur-xl bg-blue-500/25'
-                                  }`} />
+                                    }`} />
                                 )}
-                                
+
                                 {/* Sword Symbol Container */}
                                 <div
-                                  className={`relative w-12 h-12 transition-all duration-300 flex items-center justify-center overflow-hidden ${
-                                    i <= dualityMeter
+                                  className={`relative w-12 h-12 transition-all duration-300 flex items-center justify-center overflow-hidden ${i <= dualityMeter
                                       ? dualityMeter === 4
                                         ? 'drop-shadow-[0_0_24px_rgba(59,130,246,1)] drop-shadow-[0_0_40px_rgba(96,165,250,0.8)] scale-125'
                                         : 'drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] scale-110'
                                       : 'opacity-30'
-                                  }`}
+                                    }`}
                                 >
                                   {/* Sword blade symbol with blue glow */}
                                   <div className="relative w-8 h-8 flex items-center justify-center">
@@ -6772,11 +6788,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
                           {/* Status Text */}
                           <p className="text-slate-400 text-[10px] mt-3 text-center italic">
-                            {dualityMeter === 4 
-                              ? '✦ FULLY CHARGED! Ready to transform!' 
+                            {dualityMeter === 4
+                              ? '✦ FULLY CHARGED! Ready to transform!'
                               : dualityForm === 'ghoul'
-                              ? '⚔ GHOUL FORM ACTIVE - Limited Duration'
-                              : `Build charges through attacks (${dualityMeter} of 4)`}
+                                ? '⚔ GHOUL FORM ACTIVE - Limited Duration'
+                                : `Build charges through attacks (${dualityMeter} of 4)`}
                           </p>
                         </div>
                       </div>
@@ -6785,13 +6801,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                       <div className="bg-gradient-to-b from-purple-900/40 to-slate-900/60 p-4 rounded-lg border border-purple-800/50 shadow-lg relative overflow-hidden">
                         {/* Mystical glow */}
                         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/15 blur-3xl -mr-16 -mt-16 pointer-events-none" />
-                        
+
                         <div className="relative z-10">
                           <p className="text-[10px] text-purple-400 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 shadow-[0_0_6px_rgba(168,85,247,0.6)]" />
                             Soul Reserves
                           </p>
-                          
+
                           {/* Soul Display */}
                           <div className="flex gap-4 justify-center items-center">
                             {[1, 2].map((i) => (
@@ -6800,28 +6816,26 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                                 {i <= clydeSouls && (
                                   <div className="absolute inset-0 rounded-full blur-xl bg-purple-400/40 scale-125 animate-pulse" />
                                 )}
-                                
+
                                 {/* Soul Crystal */}
                                 <div
-                                  className={`relative w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${
-                                    i <= clydeSouls
+                                  className={`relative w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${i <= clydeSouls
                                       ? 'bg-gradient-to-br from-purple-500 to-purple-700 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.7)]'
                                       : 'bg-slate-800/40 border-slate-700/50'
-                                  }`}
+                                    }`}
                                 >
                                   {/* Inner glow */}
                                   {i <= clydeSouls && (
                                     <div className="absolute inset-1 rounded-full bg-gradient-to-t from-purple-500/50 to-purple-300/50 blur-sm" />
                                   )}
-                                  
+
                                   {/* Soul Indicator */}
-                                  <div className={`relative z-10 transition-transform ${
-                                    i <= clydeSouls 
+                                  <div className={`relative z-10 transition-transform ${i <= clydeSouls
                                       ? 'w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse scale-110'
                                       : 'w-2 h-2 bg-slate-600 rounded-full opacity-40'
-                                  }`} />
+                                    }`} />
                                 </div>
-                                
+
                                 {/* Soul Number Label */}
                                 <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase tracking-wider ${i <= clydeSouls ? 'text-purple-400' : 'text-slate-600'}`}>
                                   {i}
