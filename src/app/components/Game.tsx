@@ -292,6 +292,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const [clydeSouls, setClydeSouls] = useState(0); // Clyde's soul counter
   const [clydeGhoulTurnsLeft, setClydeGhoulTurnsLeft] = useState(0); // How many turns left in ghoul form
+  const [giftFromGodsUsedThisStage, setGiftFromGodsUsedThisStage] = useState(false); // Gift from the Gods: once per stage
   const [showOutrageUI, setShowOutrageUI] = useState(false); // OUTRAGE UI visible
   const [outragePhase, setOutragePhase] = useState<'ready' | 'countdown' | 'spam' | 'blast'>('ready');
   const [outrageCountdown, setOutrageCountdown] = useState(3);
@@ -1588,7 +1589,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               if (stillAlive.length === 0) {
                 addLog(`🏆 All enemies defeated by Ice Storm! Victory!`);
                 setTimeout(() => {
-                  if ([3, 6, 9].includes(currentLevel)) {
+                  if (currentLevel % 3 === 0) {
                     setShowInterlude(true);
                   } else {
                     setShowRewardScreen(true);
@@ -1648,7 +1649,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 if (stillAlive.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
                   setTimeout(() => {
-                    if ([3, 6, 9].includes(currentLevel)) {
+                    if (currentLevel % 3 === 0) {
                       setShowInterlude(true);
                     } else {
                       setShowRewardScreen(true);
@@ -1879,7 +1880,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                       if (stillAlive.length === 0) {
                         addLog(`🏆 All enemies defeated! Victory!`);
                         setTimeout(() => {
-                          if ([3, 6, 9].includes(currentLevel)) {
+                          if (currentLevel % 3 === 0) {
                             setShowInterlude(true);
                           } else {
                             setShowRewardScreen(true);
@@ -1964,7 +1965,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                             if (stillAlive.length === 0) {
                               addLog(`🏆 All enemies defeated! Victory!`);
                               setTimeout(() => {
-                                if ([3, 6, 9].includes(currentLevel)) {
+                                if (currentLevel % 3 === 0) {
                                   setShowInterlude(true);
                                 } else {
                                   setShowRewardScreen(true);
@@ -2785,7 +2786,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (allDead) {
         addLog(`🏆 All enemies defeated! Victory!`);
         setTimeout(() => {
-          if ([3, 6, 9].includes(currentLevel)) {
+          if (currentLevel % 3 === 0) {
             setShowInterlude(true);
           } else {
             setShowRewardScreen(true);
@@ -3305,7 +3306,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 if (aliveAfter.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
                   setTimeout(() => {
-                    if ([3, 6, 9].includes(currentLevel)) {
+                    if (currentLevel % 3 === 0) {
                       setShowInterlude(true);
                     } else {
                       setShowRewardScreen(true);
@@ -3342,7 +3343,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Clyde Move: Gift from the Gods
     if (move.id === 'gift_from_the_gods') {
+      if (giftFromGodsUsedThisStage) {
+        addLog(`❌ Gift from the Gods can only be used once per stage!`);
+        return;
+      }
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      setGiftFromGodsUsedThisStage(true);
       // Player chooses shield or max HP - for now we'll alternate or you can add a UI
       const choice = Math.random() < 0.5 ? 'shield' : 'hp';
       if (choice === 'shield') {
@@ -3516,7 +3522,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           if (stillAlive.length === 0) {
             addLog(`🏆 All enemies defeated! Victory!`);
             setTimeout(() => {
-              if ([3, 6, 9].includes(currentLevel)) {
+              if (currentLevel % 3 === 0) {
                 setShowInterlude(true);
               } else {
                 setShowRewardScreen(true);
@@ -3626,7 +3632,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           if (stillAlive.length === 0) {
             addLog(`🏆 All enemies defeated! Victory!`);
             setTimeout(() => {
-              if ([3, 6, 9].includes(currentLevel)) {
+              if (currentLevel % 3 === 0) {
                 setShowInterlude(true);
               } else {
                 setShowRewardScreen(true);
@@ -3699,7 +3705,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (stillAlive.length === 0) {
               addLog(`🏆 All enemies defeated! Victory!`);
               setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) {
+                if (currentLevel % 3 === 0) {
                   setShowInterlude(true);
                 } else {
                   setShowRewardScreen(true);
@@ -3786,7 +3792,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (stillAlive.length === 0) {
               addLog(`🏆 All enemies defeated by Ice Storm! Victory!`);
               setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) {
+                if (currentLevel % 3 === 0) {
                   setShowInterlude(true);
                 } else {
                   setShowRewardScreen(true);
@@ -4008,7 +4014,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (aliveAfter.length === 0) {
               addLog(`🏆 All enemies defeated! Victory!`);
               setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) {
+                if (currentLevel % 3 === 0) {
                   setShowInterlude(true);
                 } else {
                   setShowRewardScreen(true);
@@ -4301,7 +4307,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         if (aliveEnemies.length === 0) {
           addLog(`🏆 All enemies defeated! Victory!`);
           setTimeout(() => {
-            if ([3, 6, 9].includes(currentLevel)) {
+            if (currentLevel % 3 === 0) {
               setShowInterlude(true);
             } else {
               setShowRewardScreen(true);
@@ -4512,7 +4518,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setEnemies(prev => prev.map(e => ({ ...e, currentHealth: 0 })));
         setIsPlayerTurn(false);
         setTimeout(() => {
-          if ([3, 6, 9].includes(currentLevel)) {
+          if (currentLevel % 3 === 0) {
             setShowInterlude(true);
           } else {
             setShowRewardScreen(true);
@@ -4688,6 +4694,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setTimeout(() => {
           setCurrentStage(2);
           setCurrentLevel(1);
+          setGiftFromGodsUsedThisStage(false);
           setPermanentUpgrades(prev => {
             const newBonus = prev.healthBonus + 25;
             setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus); // Full Heal with new max
@@ -4706,6 +4713,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setTimeout(() => {
           setCurrentStage(3);
           setCurrentLevel(1);
+          setGiftFromGodsUsedThisStage(false);
           const bonusHealth = 50;
           setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + bonusHealth }));
           setPlayerHealth(hero.stats.health + equipHealthBonus + permanentUpgrades.healthBonus + bonusHealth);
@@ -4730,6 +4738,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setTimeout(() => {
           setCurrentStage(4);
           setCurrentLevel(1);
+          setGiftFromGodsUsedThisStage(false);
           const bonusHealth = 100;
           setPermanentUpgrades(prev => {
             const newBonus = prev.healthBonus + bonusHealth;
@@ -5141,6 +5150,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Reset all game state to start fresh with the same hero
     setCurrentStage(1);
     setCurrentLevel(1);
+    setGiftFromGodsUsedThisStage(false);
     setPlayerHealth(hero.stats.health + equipHealthBonus);
     setPlayerAttack(hero.stats.attack + equipAttackBonus);
     setPlayerDefense(hero.stats.defense + equipDefenseBonus);
@@ -5796,7 +5806,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   if (aliveAfter.length === 0) {
                     addLog(`🏆 All enemies defeated! Victory!`);
                     setTimeout(() => {
-                      if ([3, 6, 9].includes(currentLevel)) {
+                      if (currentLevel % 3 === 0) {
                         setShowInterlude(true);
                       } else {
                         setShowRewardScreen(true);
