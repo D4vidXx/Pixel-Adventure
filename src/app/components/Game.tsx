@@ -1460,7 +1460,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setTimeout(() => {
           let damage: number;
           const critRoll = rollD20(false); // enemy attack
-          let isCritical = critRoll === 20;
+          let isCritical = critRoll === 20 && enemy.type !== 'BOSS'; // Bosses cannot crit naturally
 
           // Decrement Lord Inferno aura cooldown
           if (enemy.name === 'Lord Inferno') {
@@ -6253,8 +6253,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                     }}
                     transition={{ duration: 0.5 }}
                     className={`w-36 h-36 sm:w-48 sm:h-48 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl flex items-center justify-center relative overflow-hidden ${dualityMeter === 4 && hero.id === 'clyde'
-                        ? 'border-2 animate-pulse shadow-lg shadow-blue-500/60 relative'
-                        : 'border-2 border-slate-600/50 shadow-lg shadow-slate-900/50'
+                      ? 'border-2 animate-pulse shadow-lg shadow-blue-500/60 relative'
+                      : 'border-2 border-slate-600/50 shadow-lg shadow-slate-900/50'
                       }`}
                   >
                     {/* Blue Fire Border Animation when full */}
@@ -6713,8 +6713,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
                           {/* Ghoul Sword Symbols Container */}
                           <div className={`flex gap-3 justify-center ${dualityMeter === 4
-                              ? 'relative'
-                              : ''
+                            ? 'relative'
+                            : ''
                             }`}>
                             {/* Intense glow aura when fully charged */}
                             {dualityMeter === 4 && (
@@ -6737,18 +6737,18 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                                 {/* Mystical glow for active swords */}
                                 {i <= dualityMeter && (
                                   <div className={`absolute inset-0 scale-130 animate-pulse ${dualityMeter === 4
-                                      ? 'blur-2xl bg-blue-600/50'
-                                      : 'blur-xl bg-blue-500/25'
+                                    ? 'blur-2xl bg-blue-600/50'
+                                    : 'blur-xl bg-blue-500/25'
                                     }`} />
                                 )}
 
                                 {/* Sword Symbol Container */}
                                 <div
                                   className={`relative w-12 h-12 transition-all duration-300 flex items-center justify-center overflow-hidden ${i <= dualityMeter
-                                      ? dualityMeter === 4
-                                        ? 'drop-shadow-[0_0_24px_rgba(59,130,246,1)] drop-shadow-[0_0_40px_rgba(96,165,250,0.8)] scale-125'
-                                        : 'drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] scale-110'
-                                      : 'opacity-30'
+                                    ? dualityMeter === 4
+                                      ? 'drop-shadow-[0_0_24px_rgba(59,130,246,1)] drop-shadow-[0_0_40px_rgba(96,165,250,0.8)] scale-125'
+                                      : 'drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] scale-110'
+                                    : 'opacity-30'
                                     }`}
                                 >
                                   {/* Sword blade symbol with blue glow */}
@@ -6820,8 +6820,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                                 {/* Soul Crystal */}
                                 <div
                                   className={`relative w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${i <= clydeSouls
-                                      ? 'bg-gradient-to-br from-purple-500 to-purple-700 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.7)]'
-                                      : 'bg-slate-800/40 border-slate-700/50'
+                                    ? 'bg-gradient-to-br from-purple-500 to-purple-700 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.7)]'
+                                    : 'bg-slate-800/40 border-slate-700/50'
                                     }`}
                                 >
                                   {/* Inner glow */}
@@ -6831,8 +6831,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
                                   {/* Soul Indicator */}
                                   <div className={`relative z-10 transition-transform ${i <= clydeSouls
-                                      ? 'w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse scale-110'
-                                      : 'w-2 h-2 bg-slate-600 rounded-full opacity-40'
+                                    ? 'w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse scale-110'
+                                    : 'w-2 h-2 bg-slate-600 rounded-full opacity-40'
                                     }`} />
                                 </div>
 
