@@ -5,6 +5,57 @@ import { Move } from './MoveSelection';
 
 // Special moves available for purchase
 export const SPECIAL_MOVES: Record<string, Move> = {
+  // NEW MOVES
+  warrior_windswept_fury: {
+    id: 'windswept_fury',
+    name: 'Windswept Fury',
+    description: 'Deal 80 damage to all enemies.',
+    type: 'attack',
+    baseDamage: 80,
+    cost: 45,
+    cooldown: 7,
+    isAOE: true,
+    icon: Wind,
+  },
+  mage_mana_surge: {
+    id: 'mana_surge',
+    name: 'Mana Surge',
+    description: 'For the next 3 turns your moves don’t cost mana.',
+    type: 'buff',
+    cost: 0,
+    cooldown: 7,
+    icon: Sparkles
+  },
+  rogue_speed_blitz: {
+    id: 'speed_blitz',
+    name: 'Speed Blitz',
+    description: 'Deal 50 damage + 20% of your speed.',
+    type: 'attack',
+    baseDamage: 50,
+    cost: 35,
+    cooldown: 5,
+    scalesWithSpeed: true,
+    icon: Wind,
+  },
+  paladin_hammer_combo: {
+    id: 'hammer_combo',
+    name: 'Hammer Combo',
+    description: 'Use twice before CD/mana. 1st: 30 dmg, 2nd: 50 to all + heal 40 HP.',
+    type: 'attack',
+    baseDamage: 30,
+    cost: 40,
+    cooldown: 4,
+    icon: Sword,
+  },
+  gunslinger_spare_bullet: {
+    id: 'spare_bullet',
+    name: 'Spare Bullet',
+    description: 'Load a crit bullet.',
+    type: 'utility',
+    cost: 0,
+    cooldown: 3,
+    icon: Skull,
+  },
   // Stage 1 Moves
   warrior_whirlwind: {
     id: 'whirlwind',
@@ -176,26 +227,31 @@ const CLASS_STAGE_MOVES: Record<string, { stage: number; key: string }[]> = {
     { stage: 1, key: 'warrior_whirlwind' },
     { stage: 2, key: 'warrior_strengthen' },
     { stage: 3, key: 'warrior_carnage' },
+    { stage: 4, key: 'warrior_windswept_fury' },
   ],
   mage: [
     { stage: 1, key: 'mage_chain_lightning' },
     { stage: 2, key: 'mage_smite' },
     { stage: 3, key: 'mage_channeling' },
+    { stage: 4, key: 'mage_mana_surge' },
   ],
   rogue: [
     { stage: 1, key: 'rogue_lethal_execution' },
     { stage: 2, key: 'rogue_stealth_kick' },
     { stage: 3, key: 'rogue_pathfinder' },
+    { stage: 4, key: 'rogue_speed_blitz' },
   ],
   paladin: [
     { stage: 1, key: 'paladin_holy_wrath' },
     { stage: 2, key: 'paladin_holy_healing' },
     { stage: 3, key: 'paladin_groundbreak' },
+    { stage: 4, key: 'paladin_hammer_combo' },
   ],
   gunslinger: [
     { stage: 1, key: 'gunslinger_bullet_storm' },
     { stage: 2, key: 'gunslinger_quick_draw' },
     { stage: 3, key: 'gunslinger_standoff' },
+    { stage: 4, key: 'gunslinger_spare_bullet' },
   ],
 };
 

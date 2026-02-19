@@ -317,6 +317,26 @@ export const PALADIN_HEROES: Hero[] = [
     },
     moves: PALADIN_BASIC_MOVES,
   },
+  {
+    id: 'eli',
+    name: 'Eli Grassylocks',
+    classId: 'paladin',
+    title: 'The Green Warden',
+    description: 'A devoted protector who creates a regenerative shield to withstand any assault.',
+    stats: {
+      health: 135,
+      attack: 30,
+      defense: 45,
+      speed: 18,
+    },
+    resourceType: 'Mana',
+    uniqueAbility: {
+      id: 'grassylocks_shield',
+      name: "Grassylocks' Shield",
+      description: 'Passive: Has a togglable shield (starts at 50, upgrades every stage). When turned off, it regenerates 20 shield every turn.',
+    },
+    moves: PALADIN_BASIC_MOVES,
+  },
 ];
 
 // Gunslinger Heroes

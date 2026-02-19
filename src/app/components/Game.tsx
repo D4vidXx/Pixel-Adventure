@@ -5,6 +5,7 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
+import animeForestStyleArt from '../../assets/anime-forest.png';
 import { Move } from './MoveSelection';
 import { MoveSelection } from './MoveSelection';
 import { RhythmGame } from './RhythmGame';
@@ -33,6 +34,10 @@ import { Hero } from '../data/heroes';
 import { getEquipmentItem } from '../data/equipment-items';
 import { ParticleBackground } from './ParticleBackground';
 import { SoulMeterUI } from './SoulMeterUI';
+import { HeroStatusPanel } from './HeroStatusPanel';
+import { HeroActionPanel } from './HeroActionPanel';
+
+import { Difficulty, DIFFICULTY_CONFIG } from '../data/difficulty';
 
 interface GameProps {
   hero: Hero;
@@ -41,9 +46,11 @@ interface GameProps {
   ownedItems?: string[];
   onDiamondsEarned?: (amount: number) => void;
   activeStyleId?: string;
+  activeBackgroundId?: string;
+  difficulty: Difficulty;
 }
 
-export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], onDiamondsEarned, activeStyleId }: GameProps) {
+export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], onDiamondsEarned, activeStyleId, activeBackgroundId, difficulty }: GameProps) {
   // Equipment helper
   const [runEquippedItems, setRunEquippedItems] = useState(equippedItems);
   useEffect(() => {
@@ -175,8 +182,22 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   useEffect(() => { playerShieldRef.current = playerShield; }, [playerShield]);
   useEffect(() => { permafrostIceActiveRef.current = permafrostIceActive; }, [permafrostIceActive]);
 
+  // Runtime Enemy Type
+  type RuntimeEnemy = Enemy & {
+    currentHealth: number;
+    shield: number;
+    weaknessTurns: number;
+    poisonTurns: number;
+    slowedTurns: number;
+    stunTurns: number;
+    burnTurns: number;
+    iceStormTurns: number;
+    standoffTurns: number;
+    speed: number;
+  };
+
   // Multi-enemy state
-  const [enemies, setEnemies] = useState<Array<Enemy & { currentHealth: number; shield: number; weaknessTurns: number; poisonTurns: number; slowedTurns: number; stunTurns: number; burnTurns: number; iceStormTurns: number; standoffTurns: number }>>([]);
+  const [enemies, setEnemies] = useState<RuntimeEnemy[]>([]);
   const enemiesRef = useRef(enemies);
   useEffect(() => {
     enemiesRef.current = enemies;
@@ -198,8 +219,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [isTraining, setIsTraining] = useState(false);
   const [takeExtraDamageNextTurn, setTakeExtraDamageNextTurn] = useState(false);
   const [playerWeaknessTurns, setPlayerWeaknessTurns] = useState(0);
+  const [playerPoisonTurns, setPlayerPoisonTurns] = useState(0);
+  const [playerBleedTurns, setPlayerBleedTurns] = useState(0);
+  const [pollenMeter, setPollenMeter] = useState(0);
+  const [isPlayerPoisonLethal, setIsPlayerPoisonLethal] = useState(false);
+  const [vineTrapTurns, setVineTrapTurns] = useState(0);
   const [lastMoveIdByEnemy, setLastMoveIdByEnemy] = useState<Record<string, string>>({});
   const lastMoveIdByEnemyRef = useRef<Record<string, string>>({});
+  const elfKingCooldownsRef = useRef({ auroraBlast: 0, temporalCrowning: 0, elfParade: 0 });
   const [activeCooldowns, setActiveCooldowns] = useState<Record<string, number>>({});
   const [blockCooldownTurns, setBlockCooldownTurns] = useState(0);
   const [bossChargeCount, setBossChargeCount] = useState(0);
@@ -210,15 +237,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [lordInfernoPowerMeter, setLordInfernoPowerMeter] = useState(0);
   const [ringThresholdBonus, setRingThresholdBonus] = useState(0);
   const ringThresholdBonusRef = useRef(0);
+  const goldRef = useRef(gold);
 
   useEffect(() => { lordInfernoPowerMeterRef.current = lordInfernoPowerMeter; }, [lordInfernoPowerMeter]);
   useEffect(() => { ringThresholdBonusRef.current = ringThresholdBonus; }, [ringThresholdBonus]);
   useEffect(() => { lastMoveIdByEnemyRef.current = lastMoveIdByEnemy; }, [lastMoveIdByEnemy]);
+  useEffect(() => { goldRef.current = gold; }, [gold]);
   const [lordInfernoIsOverdrive, setLordInfernoIsOverdrive] = useState(false);
   const [auraCooldown, setAuraCooldown] = useState(0);
   const [lordInfernoAuraCooldown, setLordInfernoAuraCooldown] = useState(0);
   const [lordInfernoDesperationActivated, setLordInfernoDesperationActivated] = useState(false);
+  const [robinHoodRageMeter, setRobinHoodRageMeter] = useState(0);
+  const [playerDevastationTurns, setPlayerDevastationTurns] = useState(0);
   useEffect(() => { lordInfernoAuraCooldownRef.current = lordInfernoAuraCooldown; }, [lordInfernoAuraCooldown]);
+  const [lastPlayerMoveId, setLastPlayerMoveId] = useState<string | null>(null);
+  const [thiefStolenState, setThiefStolenState] = useState<{ gold: number, artifactId: string | null }>({ gold: 0, artifactId: null });
   const [ownedSpecialMoves, setOwnedSpecialMoves] = useState<string[]>([]);
   const [buffMoveUsageCount, setBuffMoveUsageCount] = useState(0);
   const [trainUsageCount, setTrainUsageCount] = useState(0);
@@ -230,6 +263,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [turtleCountdown, setTurtleCountdown] = useState(10);
   const turtleTimerRef = useRef<number | null>(null);
   const turtleResolvedRef = useRef(false);
+  const [triggerEnemyTurn, setTriggerEnemyTurn] = useState(false);
   const [showStage3EquipmentPick, setShowStage3EquipmentPick] = useState(false);
   const [selectedStage3EquipmentId, setSelectedStage3EquipmentId] = useState<string | null>(null);
   const [isDefeatAnimating, setIsDefeatAnimating] = useState(false);
@@ -273,6 +307,73 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [showPiratesChestPopup, setShowPiratesChestPopup] = useState(false);
   useEffect(() => { guaranteedCritRef.current = guaranteedCrit; }, [guaranteedCrit]);
   useEffect(() => { guaranteedDodgeRef.current = guaranteedDodge; }, [guaranteedDodge]);
+
+  // Eli Grassylocks State
+  const [eliShieldActive, setEliShieldActive] = useState(true);
+  const [eliShieldCharge, setEliShieldCharge] = useState(50);
+
+  // Calculate Max Shield based on Stage
+  const maxEliShield = useMemo(() => {
+    switch (currentStage) {
+      case 1: return 50;
+      case 2: return 100;
+      case 3: return 200;
+      case 4: return 350;
+      default: return 50;
+    }
+  }, [currentStage]);
+
+  // Upgrade Eli's shield when stage increases
+  // We use a ref to track if we've already applied the upgrade for this stage/maxShield value
+  // This prevents re-running this logic on re-renders or other state changes
+  const lastMaxShieldRef = useRef(maxEliShield);
+
+  useEffect(() => {
+    if (hero.id === 'eli' && maxEliShield > lastMaxShieldRef.current) {
+      // Calculate difference
+      const diff = maxEliShield - lastMaxShieldRef.current;
+
+      // Apply difference to charge
+      setEliShieldCharge(prev => prev + diff);
+
+      // If active, also apply to current playerShield
+      if (eliShieldActive) {
+        setPlayerShield(prev => prev + diff);
+      }
+
+      lastMaxShieldRef.current = maxEliShield;
+      addLog(`🛡️ Shield Capacity Upgraded! (+${diff})`);
+    } else if (hero.id === 'eli' && maxEliShield < lastMaxShieldRef.current) {
+      // Handle case where maxShield decreases (e.g. new run started?)
+      lastMaxShieldRef.current = maxEliShield;
+    }
+  }, [maxEliShield, hero.id, eliShieldActive]);
+
+  const toggleEliShield = () => {
+    if (eliShieldActive) {
+      // Deactivate: Save current shield to charge, set actual shield to 0
+      setEliShieldCharge(playerShield);
+      setPlayerShield(0);
+      setEliShieldActive(false);
+      addLog('🛡️ Shield Deactivated! Regenerating...');
+    } else {
+      // Activate: Restore shield from charge
+      setPlayerShield(eliShieldCharge);
+      setEliShieldActive(true);
+      addLog('🛡️ Shield Activated!');
+    }
+  };
+
+  // Helper for Healing Reduction (Elf King)
+  const calculateHeal = (amount: number): number => {
+    // Check enemies state for Elf King
+    // Note: 'enemies' state is available in this scope
+    if (enemies.some(e => e.id === 'elf_king' && e.currentHealth > 0)) {
+      return Math.floor(amount * 0.5);
+    }
+    return amount;
+  };
+
   const [dualityForm, setDualityForm] = useState<string>(
     hero.id === 'wolfgang' ? 'keyboard' : hero.id === 'clyde' ? 'normal' : 'human'
   ); // Generalized: human/beast OR keyboard/drums/violin OR normal/ghoul
@@ -284,7 +385,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const isSleepingRef = useRef(false);
   useEffect(() => { isSleepingRef.current = isSleeping; }, [isSleeping]);
 
-  // Reset gunslinger-specific states when hero changes
   useEffect(() => {
     setBulletsSpent(0);
     setGuaranteedCrit(false);
@@ -327,7 +427,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const ignoreCap = hasEquipment('beer') || hasEquipment('chinese_waving_cat');
   const baseCap = getStatCap();
   const attackCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 1.3) : baseCap;
-  const defenseCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 0.7) : baseCap;
+  let defenseCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 0.7) : baseCap;
+  if (vineTrapTurns > 0) defenseCap += 50;
   const attackBonusFromUpgrades = hero.id === 'clyde' ? 0 : permanentUpgrades.attackBonus;
   const attackBase = hero.id === 'clyde' ? hero.stats.attack : playerAttack;
   // Calculate capped stats (excluding equipment base bonuses)
@@ -346,7 +447,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   // Lucian Passive: +1 ATK for every 10 Soul (uncapped)
   const lucianSoulBonus = hero.id === 'lucian' ? Math.floor(lucianSoulMeter / 10) : 0;
   const finalAttack = Math.floor((uncappedAttack + attackBonusFromArtifacts + lucianSoulBonus) * attackMultiplier);
-  const finalDefense = Math.floor((uncappedDefense + artifactBonusStats.defense) * defenseMultiplier);
+  const rawDefense = Math.floor((uncappedDefense + artifactBonusStats.defense) * defenseMultiplier);
+  const finalDefense = Math.max(0, rawDefense - (vineTrapTurns > 0 ? 50 : 0));
 
   const baseSpeed = hero.stats.speed + equipSpeedBonus + bonusSpeed + (pirateShipActive ? pirateShipSpeedBonus : 0);
   const effectiveSpeed = Math.max(0, Math.floor(baseSpeed * (playerSpeedDebuffTurns > 0 ? 0.5 : 1)));
@@ -383,6 +485,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   // Get hero's moveset (including owned special moves)
   const [characterMoves, setCharacterMoves] = useState<Move[]>(hero.moves);
+
+  // Stage 4 Move States
+  const [manaSurgeTurns, setManaSurgeTurns] = useState(0);
+  const [hammerComboStage, setHammerComboStage] = useState(0); // 0 = First hit, 1 = Second hit (Big AOE)
 
   // Update character moves based on form/class (Reactive)
   useEffect(() => {
@@ -422,6 +528,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     if (entrapmentTurns > 0) return;
 
+    if (vineTrapTurns > 0) {
+      setVineTrapTurns(prev => Math.max(0, prev - 1));
+    }
+
     const availableMoves = characterMoves.filter(move => {
       if (move.id === 'outrage') return false;
       const onCooldown = (activeCooldowns[move.id] || 0) > 0;
@@ -442,6 +552,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return nextDisabled;
     });
   }, [isPlayerTurn, characterMoves, activeCooldowns, playerResource, runEquippedItems]);
+
+  // Handle forced enemy turn trigger (e.g. The Hare)
+  useEffect(() => {
+    if (triggerEnemyTurn) {
+      setTriggerEnemyTurn(false);
+      setTimeout(() => {
+        enemyTurn();
+      }, 500);
+    }
+  }, [triggerEnemyTurn]);
 
   useEffect(() => {
     if (isPlayerTurn) return;
@@ -621,6 +741,98 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     };
   }, [screenShakeIntensity]);
 
+  // Player Turn Start Effects (Poison, etc.)
+  useEffect(() => {
+    if (!isPlayerTurn) return;
+
+    // Handle Player Bleed (Lost Hunter Trait)
+    if (playerBleedTurns > 0) {
+      const bleedDamage = Math.ceil(maxPlayerHealth * 0.05);
+      setPlayerHealth(prev => Math.max(0, prev - bleedDamage));
+
+      setPermanentUpgrades(prev => ({
+        ...prev,
+        defenseBonus: prev.defenseBonus - 10
+      }));
+
+      addLog(`🩸 You bleed for ${bleedDamage} HP and lose 10 Defense!`);
+      setPlayerBleedTurns(prev => Math.max(0, prev - 1));
+
+      // Check for death by bleed
+      if (playerHealth - bleedDamage <= 0 && !isDefeatAnimating && !showLoseScreen) {
+        setTimeout(() => {
+          startDefeatTransition(800);
+        }, 0);
+      }
+    }
+
+    // Handle Devastation (Robin Hood)
+    if (playerDevastationTurns > 0) {
+      const devDamage = Math.ceil(maxPlayerHealth * 0.10);
+      setPlayerHealth(prev => Math.max(0, prev - devDamage));
+      addLog(`🏹 Devastation deals ${devDamage} damage!`);
+      setPlayerDevastationTurns(prev => Math.max(0, prev - 1));
+
+      if (playerHealth - devDamage <= 0 && !isDefeatAnimating && !showLoseScreen) {
+        setTimeout(() => {
+          startDefeatTransition(800);
+        }, 0);
+      }
+    }
+
+    // Handle Player Poison
+    if (playerPoisonTurns > 0) {
+      const damagePercent = isPlayerPoisonLethal ? 0.08 : 0.05;
+      const damage = Math.ceil(maxPlayerHealth * damagePercent);
+
+      setPlayerHealth(prev => {
+        const newHealth = Math.max(0, prev - damage);
+        // Check for defeat due to poison
+        if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
+          setTimeout(() => {
+            const reviveHealth = resolveCedricBeastDeath();
+            if (reviveHealth !== null) {
+              setPlayerHealth(reviveHealth);
+              return;
+            }
+            const soulReviveHealth = resolveClydeSoulRevive();
+            if (soulReviveHealth !== null) {
+              setPlayerHealth(soulReviveHealth);
+              return;
+            }
+            startDefeatTransition(800);
+          }, 0);
+        }
+        return newHealth;
+      });
+
+      addLog(`🤢 Poison deals ${damage} damage! (${playerPoisonTurns - 1} turns remaining)`);
+      setPlayerPoisonTurns(prev => Math.max(0, prev - 1));
+
+      if (playerPoisonTurns - 1 <= 0) {
+        setIsPlayerPoisonLethal(false);
+      }
+    }
+
+    // Handle Weakness
+    if (playerWeaknessTurns > 0) {
+      setPlayerWeaknessTurns(prev => Math.max(0, prev - 1));
+    }
+
+    // Handle Speed Debuff (Webbed)
+    if (playerSpeedDebuffTurns > 0) {
+      setPlayerSpeedDebuffTurns(prev => Math.max(0, prev - 1));
+    }
+
+    // Handle Mana Surge Expiry
+    if (manaSurgeTurns > 0) {
+      setManaSurgeTurns(prev => Math.max(0, prev - 1));
+      if (manaSurgeTurns === 1) {
+        addLog('✨ Mana Surge fades...');
+      }
+    }
+  }, [isPlayerTurn]);
+
   const loadLevel = (level: number, stageOverride?: number) => {
     const stageToLoad = stageOverride || currentStage;
     const levelData = stageToLoad === 1
@@ -632,19 +844,57 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           : STAGE_4_LEVELS[level];
     if (!levelData) return;
 
-    // Initialize enemies with their current health
-    const initializedEnemies = levelData.enemies.map(e => ({
-      ...e,
-      currentHealth: e.maxHealth,
-      shield: 0,
-      weaknessTurns: 0,
-      poisonTurns: 0,
-      slowedTurns: 0,
-      stunTurns: 0,
-      burnTurns: 0,
-      iceStormTurns: 0,
-      standoffTurns: 0
-    }));
+    // Reset Gift from the Gods usage if entering a new stage (detected via stage override or just logic)
+    // Actually, simple way: always reset it here. If we are just reloading a level (same stage) it might be an issue?
+    // "Usable once per stage".
+    // If we die and restart level, should we get it back? Usually roguelikes say yes if you restart the *stage* (act), but here 'loadLevel' is called for every new level (1-1, 1-2...).
+    // Wait, 'once per stage' usually means 'once per Act' (Stage 1, Stage 2).
+    // If I use it in 1-1, I shouldn't be able to use it in 1-2.
+    // So I should NOT reset it in loadLevel UNLESS it is the start of a new Stage.
+    // The previous implementation plan said: "In loadLevel, add setGiftFromGodsUsedThisStage(false)."
+    // But loadLevel is called for every level.
+    // I need to check if 'level === 1' maybe? Or rely on the fact that we change stages explicitly.
+    // Let's look at how stage transitions happen. Use `proceedToNextLevel`.
+    // In `proceedToNextLevel`, we explicitly call `setGiftFromGodsUsedThisStage(false)` when changing stages.
+    // OH! I see `setGiftFromGodsUsedThisStage(false)` was ALREADY in `proceedToNextLevel` in the code I read earlier?
+    // Let me check lines 5385, 5404, 5432 in `Game.tsx` (from my previous read).
+    // ...
+    // Yes! `setGiftFromGodsUsedThisStage(false)` IS present in `proceedToNextLevel` for Stage 1->2, 2->3, 3->4.
+    // So the reset logic MIGHT already be there?
+    // Wait, the user said "Currently... is never reset".
+    // Maybe they meant if you restart the game? Or maybe the user missed it?
+    // Or maybe it's not working because `proceedToNextLevel` isn't the only way to change stages or it's not being called correctly?
+    // Ah, `useEffect(() => { loadLevel(currentLevel); }, []);` initializes the game.
+    // If I save/load, state might persist?
+    // But wait, the user specifically asked for it.
+    // Let's check `loadLevel` again.
+    // If I put it in `loadLevel`, it resets every LEVEL. That would be "once per level", not "once per stage".
+    // The user wants "once per stage".
+    // So it should ONLY be reset when `currentStage` changes.
+    // I will add a `useEffect` on `currentStage` to reset it.
+
+    const diffCfg = DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG.normal;
+
+    // Initialize enemies with their current health and scaled stats
+    const initializedEnemies = levelData.enemies.map(e => {
+      const scaledHP = Math.floor(e.maxHealth * diffCfg.hpMod);
+      const scaledAtk = Math.floor(e.baseDamage * diffCfg.atkMod);
+      return {
+        ...e,
+        maxHealth: scaledHP,
+        currentHealth: scaledHP,
+        baseDamage: scaledAtk,
+        shield: 0,
+        weaknessTurns: 0,
+        poisonTurns: 0,
+        slowedTurns: 0,
+        stunTurns: 0,
+        burnTurns: 0,
+        iceStormTurns: 0,
+        standoffTurns: 0,
+        speed: 15
+      };
+    });
 
     setEnemies(initializedEnemies);
     setSelectedTargetId(initializedEnemies[0]?.id || null);
@@ -664,7 +914,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Passive: Endurance (Gareth) - Heal 20 HP at level start (overflow becomes shield)
     if (hero.id === 'gareth') {
-      const healAmount = 20;
+      const healAmount = calculateHeal(20);
       let newHealth = playerHealth + healAmount;
       let shieldGain = 0;
 
@@ -676,9 +926,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setPlayerHealth(newHealth);
       if (shieldGain > 0) {
         setPlayerShield(prev => prev + shieldGain);
-        addLog(`🛡️ Endurance: Healed 20 HP! +${shieldGain} shield from overflow!`);
+        addLog(`🛡️ Endurance: Healed ${healAmount} HP! +${shieldGain} shield from overflow!`);
       } else {
-        addLog(`🛡️ Endurance: Healed 20 HP!`);
+        addLog(`🛡️ Endurance: Healed ${healAmount} HP!`);
       }
     }
 
@@ -697,7 +947,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setLordInfernoIsOverdrive(false);
     setAuraCooldown(0);
     setLordInfernoAuraCooldown(0);
+    setAuraCooldown(0);
+    setLordInfernoAuraCooldown(0);
     setLordInfernoDesperationActivated(false);
+    setRobinHoodRageMeter(0);
+    setPlayerDevastationTurns(0);
     setPopcornEatenThisLevel(0);
     setSlimeBootsUsedThisLevel(false);
     setMotherGolemSpawned(false);
@@ -708,7 +962,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setChannelingAttackBuffActive(false);
     setEntrapmentTurns(0);
     setEntrapmentMoveId(null);
+    setEntrapmentMoveId(null);
     setDisabledMoveId(null);
+    setPlayerWeaknessTurns(0);
+    setPlayerSpeedDebuffTurns(0);
     magmaSoldierSpawnIdRef.current = 0;
     magmaOverlordEntrapmentCdRef.current = 0;
     magmaOverlordFireTornadoCdRef.current = 0;
@@ -725,9 +982,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setPlayerResource(prev => Math.min(maxPlayerResource, prev + resourceBonus));
 
     const healthBonus = Math.floor(maxPlayerHealth / 8);
-    setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healthBonus));
+    const healAmount = calculateHeal(healthBonus);
+    setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
 
-    addLog(`✨ New level! Restored ${resourceBonus} ${resourceType} and healed ${healthBonus} HP!`);
+    addLog(`✨ New level! Restored ${resourceBonus} ${resourceType} and healed ${healAmount} HP!`);
+
+
 
     if (artifacts['wooden_mask']) {
       const shieldBonus = 8 * artifacts['wooden_mask'];
@@ -747,12 +1007,83 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       'Waiting for your action...',
     ]);
 
+    // Level Start: Grand Theft (Thief) -- moved after combat log so logs are visible
+    addLog(`[DEBUG] Enemies this level: ${initializedEnemies.map(e => e.name).join(', ')}`);
+    if (stageToLoad === 4 && initializedEnemies.some(e => e.name === 'Thief')) {
+      const GoldToSteal = Math.floor(goldRef.current * 0.10);
+      setGold(prev => Math.max(0, prev - GoldToSteal));
+
+      // Steal one legendary artifact
+      const artifactKeys = Object.keys(artifacts).filter(k => (artifacts[k] || 0) > 0);
+      let stolenArtifactId: string | null = null;
+      if (artifactKeys.length > 0) {
+        stolenArtifactId = artifactKeys[Math.floor(Math.random() * artifactKeys.length)];
+        setArtifacts(prev => {
+          const updated = {
+            ...prev,
+            [stolenArtifactId!]: prev[stolenArtifactId!] - 1
+          };
+          // Recalculate artifact bonus stats after theft
+          let attack = 0, defense = 0;
+          if (updated['finished_rubix_cube']) {
+            const attackBoost = hero.id === 'clyde' ? 0 : Math.floor(cappedAttack * 0.08) * updated['finished_rubix_cube'];
+            const defenseBoost = Math.floor(cappedDefense * 0.08) * updated['finished_rubix_cube'];
+            attack += attackBoost;
+            defense += defenseBoost;
+          }
+          if (updated['lucky_charm']) {
+            // Only apply the highest stat bonus for each charm
+            for (let i = 0; i < updated['lucky_charm']; i++) {
+              const stats = hero.id === 'clyde'
+                ? { defense: finalDefense, speed: baseSpeed }
+                : { attack: finalAttack, defense: finalDefense, speed: baseSpeed };
+              const highest = Object.entries(stats).sort((a, b) => b[1] - a[1])[0];
+              const boost = Math.floor(highest[1] * 0.08);
+              if (highest[0] === 'attack') attack += boost;
+              else if (highest[0] === 'defense') defense += boost;
+              // speed bonus is handled elsewhere
+            }
+          }
+          setArtifactBonusStats({ attack, defense });
+          return updated;
+        });
+      }
+
+      setThiefStolenState({ gold: GoldToSteal, artifactId: stolenArtifactId });
+      if (GoldToSteal > 0 && stolenArtifactId) {
+        addLog(`💰 A Thief ambushes you and steals ${GoldToSteal} Gold and your ${(stolenArtifactId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))}! You will NOT get them back!`);
+        addLog(`📝 The Thief stole: ${GoldToSteal} Gold, Artifact: ${(stolenArtifactId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))}`);
+      } else if (GoldToSteal > 0) {
+        addLog(`💰 A Thief ambushes you and steals ${GoldToSteal} Gold! You will NOT get it back!`);
+        addLog(`📝 The Thief stole: ${GoldToSteal} Gold`);
+      } else if (stolenArtifactId) {
+        addLog(`💰 A Thief ambushes you and steals your ${(stolenArtifactId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))}! You will NOT get it back!`);
+        addLog(`📝 The Thief stole: Artifact: ${(stolenArtifactId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))}`);
+      } else {
+        addLog(`💰 A Thief ambushes you but you have nothing to steal!`);
+      }
+    }
+
     if (stageToLoad === 3 && initializedEnemies.some(e => e.name === 'Lava Spider')) {
       setLavaSpiderAmbushPending(false);
       setPlayerWeaknessTurns(2);
       setPlayerSpeedDebuffTurns(2);
       addLog('🕸️ Lava Spiders ambush! You are webbed and weakened.');
     }
+
+    // The Hare: Quick Feet (Always goes first)
+    if (stageToLoad === 4 && initializedEnemies.some(e => e.name === 'The Hare')) {
+      setIsPlayerTurn(false);
+      setTriggerEnemyTurn(true);
+      addLog('🐇 The Hare uses Quick Feet to act first!');
+    }
+
+    // Reset Player Status Effects
+    setPlayerPoisonTurns(0);
+    setIsPlayerPoisonLethal(false);
+    setVineTrapTurns(0);
+    setPlayerBleedTurns(0);
+    setPollenMeter(0);
 
     if (stageToLoad === 3 && level === 7) {
       setShowTurtleQuestion(true);
@@ -765,6 +1096,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       let countdown = 10;
       if (turtleTimerRef.current !== null) {
         window.clearInterval(turtleTimerRef.current);
+        turtleTimerRef.current = null;
       }
       turtleTimerRef.current = window.setInterval(() => {
         countdown -= 1;
@@ -795,27 +1127,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`🍺 Beer boost! +3 Defense!`);
       } else if (statRoll < 0.75) {
         setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 3 }));
-        setPlayerHealth(prev => prev + 3);
+        // Note: Increasing max HP automatically heals usually via effect, but here we do explicit heal
+        const healAmt = calculateHeal(3);
+        setPlayerHealth(prev => prev + healAmt);
         addLog(`🍺 Beer boost! +3 Max HP!`);
       } else {
-        // We don't have a setPlayerSpeed state that persists easily as base stat?
-        // Wait, speed is hero.stats.speed.
-        // There is no setPlayerSpeed. Speed is static + bonus.
-        // But user said "+3 to a random stat (including HP/Speed)".
-        // If speed is not mutable state, I can't buff it permanently easily without 'permanentUpgrades' having speed.
-        // Assuming I should add speedBonus to permanentUpgrades?
-        // Or just buff generic stats.
-        // I'll stick to 3 stats for now to avoid breaking types, or hack it?
-        // The implementation_plan didn't specify adding speed upgrade.
-        // I'll stick to original 3 stats but +3.
-        // Wait, user explicitly said "(including HP/Speed)".
-        // I should check 'permanentUpgrades' definition. Line 94.
-        // It has attackBonus, defenseBonus, healthBonus. NO speedBonus.
-        // So I can't add speed permanently unless I change the type.
-        // I'll skip Speed for now to avoid refactor hell, or just do HP again.
-        // Actually, I'll just boost HP as fallback.
         setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 3 }));
-        setPlayerHealth(prev => prev + 3);
+        const healAmt = calculateHeal(3);
+        setPlayerHealth(prev => prev + healAmt);
         addLog(`🍺 Beer boost! +3 Max HP!`);
       }
     }
@@ -852,7 +1171,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   // Combat calculation helper
-  const calculateDamage = (baseDamage: number, attackStat: number, defenseStat: number, isEnemyAttack = false): number => {
+  const calculateDamage = (baseDamage: number, attackStat: number, defenseStatOrTarget: number | Enemy, isEnemyAttack = false): number => {
+    let defenseStat = typeof defenseStatOrTarget === 'number' ? defenseStatOrTarget : defenseStatOrTarget.defense;
+    const target = typeof defenseStatOrTarget === 'number' ? null : defenseStatOrTarget;
+
     // For every point of attack: +0.1 damage
     let attackBonus = attackStat * 0.1;
     let defenseReduction = defenseStat * 0.1;
@@ -863,11 +1185,18 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
     const baseDmg = baseDamage + attackBonus - defenseReduction;
     const variance = rollDamageVariance();
-    const finalDamage = Math.max(1, Math.floor(baseDmg * variance));
+    let finalDamage = Math.max(1, Math.floor(baseDmg * variance));
+
+    // Shield Fairy "Protective Veil" Trait
+    if (target && !isEnemyAttack) {
+      if (target.name !== 'Shield Fairy' && enemies.some(e => e.name === 'Shield Fairy' && e.currentHealth > 0)) {
+        finalDamage = Math.floor(finalDamage * 0.7);
+      }
+    }
 
     // Fredrinn Passive: 8% Lifesteal
     if (hero.uniqueAbility?.id === 'bullet_vamp') {
-      const lifesteal = Math.floor(finalDamage * 0.08);
+      const lifesteal = calculateHeal(Math.floor(finalDamage * 0.08));
       if (lifesteal > 0) {
         setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + lifesteal));
       }
@@ -877,7 +1206,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   // Critical damage ignores HALF defense
-  const calculateCritDamage = (baseDamage: number, attackStat: number, defenseStat: number): number => {
+  const calculateCritDamage = (baseDamage: number, attackStat: number, defenseStatOrTarget: number | Enemy): number => {
+    let defenseStat = typeof defenseStatOrTarget === 'number' ? defenseStatOrTarget : defenseStatOrTarget.defense;
+    const target = typeof defenseStatOrTarget === 'number' ? null : defenseStatOrTarget;
+
     const baseDmg = baseDamage + attackStat * 0.1;
     // Apply defense reduction (half effective)
     const defenseReduction = (defenseStat / 2) * 0.1;
@@ -887,7 +1219,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     const multiplier = 2.0;
 
     const netBase = Math.max(0, baseDmg - defenseReduction);
-    const finalDamage = Math.max(1, Math.floor(netBase * variance * multiplier));
+    let finalDamage = Math.max(1, Math.floor(netBase * variance * multiplier));
+
+    // Shield Fairy "Protective Veil" Trait
+    if (target) {
+      if (target.name !== 'Shield Fairy' && enemies.some(e => e.name === 'Shield Fairy' && e.currentHealth > 0)) {
+        finalDamage = Math.floor(finalDamage * 0.7);
+      }
+    }
 
     // Fredrinn Passive: 8% Lifesteal
     if (hero.uniqueAbility?.id === 'bullet_vamp') {
@@ -911,7 +1250,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       const preDefenseDamage = Math.max(1, Math.floor(baseDmg * variance * multiplier));
       const damage = Math.max(1, Math.floor(netBase * variance * multiplier));
       if (hero.uniqueAbility?.id === 'bullet_vamp') {
-        const lifesteal = Math.floor(damage * 0.08);
+        const lifesteal = calculateHeal(Math.floor(damage * 0.08));
         if (lifesteal > 0) {
           setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + lifesteal));
         }
@@ -924,7 +1263,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     const preDefenseDamage = Math.max(1, Math.floor(baseDmg * variance));
     const damage = Math.max(1, Math.floor(netBase * variance));
     if (hero.uniqueAbility?.id === 'bullet_vamp') {
-      const lifesteal = Math.floor(damage * 0.08);
+      const lifesteal = calculateHeal(Math.floor(damage * 0.08));
       if (lifesteal > 0) {
         setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + lifesteal));
       }
@@ -943,7 +1282,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const applyTurtleShellReduction = (damage: number) => {
     if (!artifacts['turtle_shell']) return damage;
-    return Math.max(0, Math.floor(damage * 0.7));
+    return Math.max(0, Math.floor(damage * 0.9));
   };
 
   const consumeChannelingAttackBuff = () => {
@@ -980,6 +1319,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     burnTurns: 0,
     iceStormTurns: 0,
     standoffTurns: 0,
+    speed: 15,
   });
 
   const createLavaGolem = (id: string) => ({
@@ -999,6 +1339,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     burnTurns: 0,
     iceStormTurns: 0,
     standoffTurns: 0,
+    speed: 15,
   });
 
   const createMagmaSoldier = (id: string) => ({
@@ -1018,15 +1359,40 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     burnTurns: 0,
     iceStormTurns: 0,
     standoffTurns: 0,
+    speed: 25,
   });
 
   const getBossRageThreshold = (bossName: string) => {
     if (bossName === 'Magma Overlord') return 6;
     if (bossName === 'Goblin King') return 4;
+    if (bossName === 'Lord Inferno') return 3;
+    if (bossName === 'Robin Hood') return 5;
+    if (bossName === 'Elf King') return 10;
     return 3;
   };
 
   const handleBossRageTrigger = (boss: Enemy) => {
+    if (boss.name === 'Robin Hood') return; // Robin Hood has its own rage logic
+
+    if (boss.name === 'Elf King') {
+      setPermanentUpgrades(prev => ({
+        ...prev,
+        attackBonus: prev.attackBonus - 100,
+        defenseBonus: prev.defenseBonus - 100
+      }));
+
+      // Spawn Random Enemy
+      const randomEnemies = [
+        { id: `elf_king_summon_${Date.now()}`, name: 'Elite Knight', type: 'ENEMY' as const, maxHealth: 1500, attack: 700, defense: 1000, baseDamage: 60, currentHealth: 1500, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+        { id: `elf_king_summon_${Date.now()}`, name: 'Shield Fairy', type: 'ENEMY' as const, maxHealth: 1000, attack: 200, defense: 500, baseDamage: 0, currentHealth: 1000, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+        { id: `elf_king_summon_${Date.now()}`, name: 'Moss Golem', type: 'ENEMY' as const, maxHealth: 800, attack: 600, defense: 820, baseDamage: 40, currentHealth: 800, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+      ];
+      const summon = randomEnemies[Math.floor(Math.random() * randomEnemies.length)];
+      setEnemies(prev => [...prev, summon]);
+      addLog(`👑 Elf King's RAGE! he curses you (-100 Atk/Def) and summons a ${summon.name}!`);
+      return;
+    }
+
     if (boss.name === 'Magma Overlord') {
       magmaSoldierSpawnIdRef.current += 1;
       const soldier = createMagmaSoldier(`magma_soldier_${magmaSoldierSpawnIdRef.current}`);
@@ -1260,16 +1626,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     if (artifactId === 'finished_rubix_cube') {
-      const attackBoost = hero.id === 'clyde' ? 0 : Math.floor(cappedAttack * 0.2);
-      const defenseBoost = Math.floor(cappedDefense * 0.2);
+      const attackBoost = hero.id === 'clyde' ? 0 : Math.floor(cappedAttack * 0.08);
+      const defenseBoost = Math.floor(cappedDefense * 0.08);
       setArtifactBonusStats(prev => ({
         attack: prev.attack + attackBoost,
         defense: prev.defense + defenseBoost,
       }));
       if (attackBoost > 0) {
-        addLog(`🎲 Rubix Cube grants +${attackBoost} Attack and +${defenseBoost} Defense! (20% each)`);
+        addLog(`🎲 Rubix Cube grants +${attackBoost} Attack and +${defenseBoost} Defense! (8% each)`);
       } else {
-        addLog(`🎲 Rubix Cube grants +${defenseBoost} Defense! (20%)`);
+        addLog(`🎲 Rubix Cube grants +${defenseBoost} Defense! (8%)`);
       }
       return;
     }
@@ -1296,6 +1662,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       addLog(`🎭 Wooden Mask grants +8 Shield!`);
     }
   };
+
 
   function grantPiratesChestLoot() {
     const roll = Math.random() * 100;
@@ -1360,7 +1727,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const applyBloodVileLifesteal = (damage: number, isCritical: boolean) => {
     if (!hasEquipment('blood_vile') || damage <= 0) return;
     const lifestealMultiplier = isCritical ? 0.10 : 0.05;
-    const healAmount = Math.floor(damage * lifestealMultiplier);
+    let healAmount = Math.floor(damage * lifestealMultiplier);
+
+    // Elf King Passive: Reduce healing by 50%
+    healAmount = calculateHeal(healAmount);
+
     if (healAmount > 0) {
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
       addLog(`🩸 Blood Vile leeches ${healAmount} HP!`);
@@ -1424,9 +1795,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       });
       return updated;
     });
+    setManaSurgeTurns(prev => Math.max(0, prev - 1));
   };
 
   const enemyTurn = (enemiesSnapshot = enemies, blockingThisTurn = false, extraDamageThisTurn = false) => {
+    // --- Ensure Mischievous Troll's attack always matches the player's attack stat ---
+    setEnemies(prev => prev.map(e =>
+      e.name === 'Mischievous Troll' ? { ...e, attack: playerAttack } : e
+    ));
     setTimeout(() => {
       const aliveEnemies = enemiesSnapshot.filter(e => e.currentHealth > 0);
       if (aliveEnemies.length === 0) {
@@ -1445,10 +1821,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setPlayerSpeedDebuffTurns(prev => Math.max(0, prev - 1));
       }
 
-      // Check for Disco Ball artifact (20% chance to skip ALL enemy turns)
+      // Check for Disco Ball artifact (10% chance to skip ALL enemy turns)
       if (artifacts['disco_ball']) {
         const distractRoll = Math.random() * 100;
-        const totalChance = 20 * artifacts['disco_ball'];
+        const totalChance = 10 * artifacts['disco_ball'];
         if (distractRoll < totalChance) {
           addLog(`🪩 The Disco Ball distracts all enemies! Their turns are skipped!`);
           endEnemyTurn();
@@ -1505,7 +1881,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           }
 
           // Lord Inferno Power Meter Logic (4 stacks = Guaranteed Crit)
-          if (enemy.type === 'BOSS') {
+          if (enemy.name === 'Lord Inferno') {
             const currentMeter = lordInfernoPowerMeterRef.current;
             if (currentMeter >= 4) {
               isCritical = true;
@@ -1513,9 +1889,86 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               addLog(`🔥 Lord Inferno unleashes FULL POWER! Guaranteed Critical Hit!`);
             } else {
               setLordInfernoPowerMeter(prev => Math.min(4, prev + 1));
-              // addLog(`⚡ Power meter builds... (${currentMeter + 1}/5)`); // Optional log to avoid spam? User requested power meter logic.
             }
           }
+
+          let skipStandardAttack = false;
+
+          // Elf King Logic
+          if (enemy.id === 'elf_king') {
+            // Decrement Cooldowns
+            if (elfKingCooldownsRef.current.temporalCrowning > 0) elfKingCooldownsRef.current.temporalCrowning--;
+            if (elfKingCooldownsRef.current.elfParade > 0) elfKingCooldownsRef.current.elfParade--;
+
+            // Rage Trait: 10 charges = -100 Stats + Spawn
+            if (bossChargeCount >= 10) {
+              setBossChargeCount(0); // Reset charge
+              setPermanentUpgrades(prev => ({
+                ...prev,
+                attackBonus: prev.attackBonus - 100,
+                defenseBonus: prev.defenseBonus - 100
+              }));
+
+              // Spawn Random Enemy
+              const randomEnemies = [
+                { id: `elf_king_summon_${Date.now()}`, name: 'Elite Knight', type: 'ENEMY' as const, maxHealth: 1500, attack: 700, defense: 1000, baseDamage: 60, currentHealth: 1500, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+                { id: `elf_king_summon_${Date.now()}`, name: 'Shield Fairy', type: 'ENEMY' as const, maxHealth: 1000, attack: 200, defense: 500, baseDamage: 0, currentHealth: 1000, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+                { id: `elf_king_summon_${Date.now()}`, name: 'Moss Golem', type: 'ENEMY' as const, maxHealth: 800, attack: 600, defense: 820, baseDamage: 40, currentHealth: 800, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 15 },
+              ];
+              const summon = randomEnemies[Math.floor(Math.random() * randomEnemies.length)];
+              setEnemies(prev => [...prev, summon]);
+              addLog(`👑 Elf King's RAGE! he curses you (-100 Atk/Def) and summons a ${summon.name}!`);
+            }
+
+            // Move Logic
+            let moveUsed = false;
+
+            // 1. Elf-Parade (CD: 10)
+            if (!moveUsed && elfKingCooldownsRef.current.elfParade === 0) {
+              const minions = Array.from({ length: 5 }, (_, i) => ({
+                id: `elf_minion_${Date.now()}_${i}`,
+                name: 'Elf Minion',
+                type: 'MINION' as const,
+                maxHealth: 100,
+                attack: 450,
+                defense: 300, // Giving some defense so they aren't paper
+                baseDamage: 20,
+                currentHealth: 100,
+                shield: 0,
+                weaknessTurns: 0,
+                poisonTurns: 0,
+                slowedTurns: 0,
+                stunTurns: 0,
+                burnTurns: 0,
+                iceStormTurns: 0,
+                standoffTurns: 0,
+                speed: 15
+              }));
+              setEnemies(prev => [...prev, ...minions]);
+              elfKingCooldownsRef.current.elfParade = 10;
+              addLog(`🎺 Elf King commands the Elf-Parade! 5 Minions appear!`);
+              moveUsed = true;
+              skipStandardAttack = true;
+            }
+
+            // 2. Temporal Crowning (CD: 7) - Heal + Cleanse
+            if (!moveUsed && elfKingCooldownsRef.current.temporalCrowning === 0) {
+              const missingHp = enemy.maxHealth - enemy.currentHealth;
+              if (missingHp > 0 || enemy.weaknessTurns > 0 || enemy.poisonTurns > 0 || enemy.burnTurns > 0) {
+                const heal = Math.floor(missingHp * 0.10);
+                setEnemies(prev => prev.map(e =>
+                  e.id === enemy.id ? { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + heal), weaknessTurns: 0, poisonTurns: 0, burnTurns: 0, stunTurns: 0 } : e
+                ));
+                elfKingCooldownsRef.current.temporalCrowning = 7;
+                addLog(`👑 Temporal Crowning! Elf King heals ${heal} HP and removes all debuffs!`);
+                moveUsed = true;
+                skipStandardAttack = true;
+              }
+            }
+
+            // 3. Aurora Blast (Basic)
+            // Falls through to standard attack logic below if no special move used.
+          } // End Elf King Logic
 
           // Check if enemy is stunned
           if (enemy.stunTurns > 0) {
@@ -1538,7 +1991,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 const newBurnTurns = Math.max(0, e.burnTurns - 1);
 
                 // Ring of Power Check
-                if (hasEquipment('ring_of_power') && newHealth > 0 && newHealth <= e.maxHealth * 0.10) {
+                const ringThreshold = 0.10 + ringThresholdBonusRef.current;
+                if (hasEquipment('ring_of_power') && newHealth > 0 && newHealth <= e.maxHealth * ringThreshold) {
                   // We need to capture this event for logging, but we are inside map.
                   // The cleanest way is to just set to 0 here.
                   return { ...e, currentHealth: 0, burnTurns: newBurnTurns };
@@ -1550,8 +2004,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             addLog(`🔥 ${enemy.name} takes ${burnDamage} burn damage! (${Math.max(0, enemy.burnTurns - 1)} turn${enemy.burnTurns - 1 !== 1 ? 's' : ''} remaining)`);
 
             // Check for execution log (Predictive check using snapshot)
-            if (hasEquipment('ring_of_power') && Math.max(0, enemy.currentHealth - burnDamage) > 0 && Math.max(0, enemy.currentHealth - burnDamage) <= enemy.maxHealth * 0.10) {
-              addLog(`💍 Ring of Power executes ${enemy.name}!`);
+            const ringThresholdCheck = 0.10 + ringThresholdBonusRef.current;
+            if (hasEquipment('ring_of_power') && Math.max(0, enemy.currentHealth - burnDamage) > 0 && Math.max(0, enemy.currentHealth - burnDamage) <= enemy.maxHealth * ringThresholdCheck) {
+              // Update bonus for next time (Side effect, but consistent with other triggers)
+              setRingThresholdBonus(prev => prev + 0.005);
+              ringThresholdBonusRef.current += 0.005;
+              addLog(`💍 Ring of Power executes ${enemy.name}! (Threshold: ${(ringThresholdCheck * 100).toFixed(1)}%)`);
             }
 
             // Check if burn killed the enemy - use a timeout to let state update
@@ -1560,11 +2018,23 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               const currentEnemy = prev.find(e => e.id === enemy.id);
               if (currentEnemy && currentEnemy.currentHealth === 0) {
                 // Always call handleEnemyDefeated to trigger all passives (Blue Tinted Glasses, etc.)
-                handleEnemyDefeated(currentEnemy, prev);
+                handleEnemyDefeated(currentEnemy, prev, []);
+
+                // Check if all enemies are dead
+                const stillAlive = prev.filter(e => e.currentHealth > 0);
+                if (stillAlive.length === 0) {
+                  addLog(`🏆 All enemies defeated! Victory!`);
+                  setTimeout(() => {
+                    if (currentLevel % 3 === 0) {
+                      setShowInterlude(true);
+                    } else {
+                      setShowRewardScreen(true);
+                    }
+                  }, 1000);
+                }
               }
             }, 0);
           }
-
           // Check for Ice Storm damage
           if (enemy.iceStormTurns > 0) {
             const baseDamagePerTurn = 16;
@@ -1582,7 +2052,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               // Check for kills and victory
               const justKilled = updated.filter(e => e.currentHealth === 0);
               justKilled.forEach(enemy => {
-                handleEnemyDefeated(enemy, updated);
+                handleEnemyDefeated(enemy, updated, []);
               });
 
               const stillAlive = updated.filter(e => e.currentHealth > 0);
@@ -1618,7 +2088,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 const newPoisonTurns = Math.max(0, e.poisonTurns - 1);
 
                 // Ring of Power Check
-                if (hasEquipment('ring_of_power') && newHealth > 0 && newHealth <= e.maxHealth * 0.10) {
+                const ringThreshold = 0.10 + ringThresholdBonusRef.current;
+                if (hasEquipment('ring_of_power') && newHealth > 0 && newHealth <= e.maxHealth * ringThreshold) {
                   return { ...e, currentHealth: 0, poisonTurns: newPoisonTurns };
                 }
 
@@ -1632,8 +2103,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             addLog(`🧪 ${enemy.name} takes ${poisonDamage} poison damage!${toxicMasteryText} (${newPoisonTurns} turn${newPoisonTurns !== 1 ? 's' : ''} remaining)`);
 
             // Check for execution log (Predictive check using snapshot)
-            if (hasEquipment('ring_of_power') && Math.max(0, enemy.currentHealth - poisonDamage) > 0 && Math.max(0, enemy.currentHealth - poisonDamage) <= enemy.maxHealth * 0.10) {
-              addLog(`💍 Ring of Power executes ${enemy.name}!`);
+            const ringThresholdCheck = 0.10 + ringThresholdBonusRef.current;
+            if (hasEquipment('ring_of_power') && Math.max(0, enemy.currentHealth - poisonDamage) > 0 && Math.max(0, enemy.currentHealth - poisonDamage) <= enemy.maxHealth * ringThresholdCheck) {
+              setRingThresholdBonus(prev => prev + 0.005);
+              ringThresholdBonusRef.current += 0.005;
+              addLog(`💍 Ring of Power executes ${enemy.name}! (Threshold: ${(ringThresholdCheck * 100).toFixed(1)}%)`);
             }
 
             // Check if poison killed the enemy - use a timeout to let state update
@@ -1642,7 +2116,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               const currentEnemy = prev.find(e => e.id === enemy.id);
               if (currentEnemy && currentEnemy.currentHealth === 0) {
                 // Always call handleEnemyDefeated to trigger all passives (Blue Tinted Glasses, etc.)
-                handleEnemyDefeated(currentEnemy, prev);
+                handleEnemyDefeated(currentEnemy, prev, []);
 
                 // Check if all enemies are dead
                 const stillAlive = prev.filter(e => e.currentHealth > 0);
@@ -1669,8 +2143,106 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
             return;
           }
+
           // All enemies attack
-          if (enemy && enemy.currentHealth > 0) {
+          if (enemy && enemy.currentHealth > 0 && !skipStandardAttack) {
+            // Pixie: Healing behavior
+            if (enemy.name === 'Pixie') {
+              const elfArcher = aliveEnemies.find(e => e.name === 'Elf Archer');
+              if (elfArcher) {
+                setEnemies(prev => prev.map(e => {
+                  if (e.id === elfArcher.id) {
+                    const healAmount = 30;
+                    return { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + healAmount) };
+                  }
+                  return e;
+                }));
+                addLog(`🧚 Pixie heals Elf Archer for 30 HP!`);
+              } else {
+                addLog(`🧚 Pixie flies around aimlessly (no Elf Archer to heal).`);
+              }
+              // Pixies don't attack the player
+              if (index === aliveEnemies.length - 1) {
+                setTimeout(() => endEnemyTurn(), 500);
+              }
+              return;
+            }
+
+            // Mischievous Troll: Mimicry Logic
+            if (enemy.name === 'Mischievous Troll') {
+              if (lastPlayerMoveId) {
+                // Find the move data from the player's current moveset (handles all classes/forms)
+                const move = characterMoves.find(m => m.id === lastPlayerMoveId);
+
+                if (move) {
+                  if (move.baseDamage) {
+                    // Troll mimics at EXACT player's attack stat, and uses last move
+                    const trollDmg = move.baseDamage; // Use exact base damage
+                    const { damage: finalTrollDmg } = calculateEnemyDamage(trollDmg, playerAttack, finalDefense, false); // Use player's attack stat
+                    const reducedDmg = applyTurtleShellReduction(finalTrollDmg);
+
+                    // Properly apply damage to shield first, then health
+                    setPlayerShield(prevShield => {
+                      if (prevShield > 0) {
+                        if (prevShield >= reducedDmg) {
+                          // All damage absorbed by shield
+                          addLog(`🛡️ Your shield absorbs the troll's mimic attack! (-${reducedDmg} shield)`);
+                          return prevShield - reducedDmg;
+                        } else {
+                          // Shield breaks, remainder to health
+                          const leftover = reducedDmg - prevShield;
+                          setPlayerHealth(prevHealth => {
+                            const newHealth = Math.max(0, prevHealth - leftover);
+                            if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
+                              setTimeout(() => startDefeatTransition(800), 0);
+                            }
+                            return newHealth;
+                          });
+                          addLog(`🛡️ Your shield breaks! (-${prevShield} shield), you take ${leftover} damage.`);
+                          return 0;
+                        }
+                      } else {
+                        setPlayerHealth(prevHealth => {
+                          const newHealth = Math.max(0, prevHealth - reducedDmg);
+                          if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
+                            setTimeout(() => startDefeatTransition(800), 0);
+                          }
+                          return newHealth;
+                        });
+                        addLog(`🃏 Mischievous Troll mimics ${move.name} with your own attack! Dealt ${reducedDmg} damage!`);
+                        return 0;
+                      }
+                    });
+                  } else if (move.type === 'buff') {
+                    // Troll mimics buff moves: apply the same buff to itself
+                    let didBuff = false;
+                    if (move.defenseBoost && move.defenseBoost > 0) {
+                      // If the move grants shield/defense, give the troll a shield
+                      setEnemies(prev => prev.map(e =>
+                        e.id === enemy.id ? { ...e, shield: (e.shield || 0) + move.defenseBoost! } : e
+                      ));
+                      addLog(`🃏 Mischievous Troll mimics your buff move: ${move.name} and gains ${move.defenseBoost} shield!`);
+                      didBuff = true;
+                    }
+                    if (!didBuff) {
+                      addLog(`🃏 Mischievous Troll mimics your buff move: ${move.name}!`);
+                    }
+                  } else {
+                    addLog(`🃏 Mischievous Troll tries to mimic, but fails!`);
+                  }
+                } else {
+                  addLog(`🃏 Mischievous Troll tries to mimic, but fails!`);
+                }
+              } else {
+                addLog(`🃏 Mischievous Troll laughs at you!`);
+              }
+              // Troll attack replaces generic attack
+              if (index === aliveEnemies.length - 1) {
+                setTimeout(() => endEnemyTurn(), 500);
+              }
+              return;
+            }
+
             if (enemy.name === 'Magma Overlord') {
               if (magmaOverlordEntrapmentCdRef.current > 0) {
                 magmaOverlordEntrapmentCdRef.current -= 1;
@@ -1720,6 +2292,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (enemy.name === 'Jester') {
               addLog(getJesterTaunt());
             }
+
             const shouldDodge = guaranteedDodgeRef.current || Math.random() * 100 < totalDodgeChance;
             if (shouldDodge) {
               if (guaranteedDodgeRef.current) {
@@ -1757,8 +2330,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 });
               }
               if (hasEquipment('four_leaf_clover')) {
-                setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 4));
-                addLog(`🍀 4-Leaf Clover restores 4 HP!`);
+                const healAmt = calculateHeal(4);
+                setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
+                addLog(`🍀 4-Leaf Clover restores ${healAmt} HP!`);
               }
               if (index === aliveEnemies.length - 1) {
                 setTimeout(() => endEnemyTurn(), 500);
@@ -1779,6 +2353,30 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             const attackStat = enemy.attack + (enemy.type === 'BOSS' ? bossAttackBonus : 0);
             const { damage: rawDamage, preDefenseDamage } = calculateEnemyDamage(baseDamageForAttack, attackStat, defenseForDamage, isCritical);
             let damage = rawDamage;
+
+            // Shield Fairy: Deals 3% Max HP True Damage
+            if (enemy.name === 'Shield Fairy') {
+              damage = Math.ceil(maxPlayerHealth * 0.03);
+              addLog(`🧚 Shield Fairy drains life! Consuming 3% Max HP (${damage})!`);
+            }
+
+            // Moss Golem: Dangerous Smell
+            if (enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
+              const isLethal = Math.random() < 0.1;
+              setPlayerPoisonTurns(3);
+              setIsPlayerPoisonLethal(isLethal);
+              if (isLethal) {
+                addLog(`🤢 ${enemy.name}'s Dangerous Smell inflicts LETHAL Poison! (8% Max HP/turn)`);
+              } else {
+                addLog(`🤢 ${enemy.name}'s Dangerous Smell inflicts Poison!`);
+              }
+            }
+
+            // Vine Monster: Vine Snatch
+            if (enemy.traitId === 'vine_snatch' && Math.random() < 0.4) {
+              setVineTrapTurns(1);
+              addLog(`🌿 ${enemy.name} uses Vine Snatch! You are wrapped up and your defense is lowered!`);
+            }
 
             // Apply block damage reduction if player blocked this turn
             if (blockingThisTurn && index === 0) {
@@ -1851,7 +2449,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               if (isCritical) {
                 addLog(`💥 CRITICAL HIT! ${enemy.name} attacks for ${damage} damage!`);
               } else {
-                if (isUsingGiantSpear) {
+                if (enemy.id === 'elf_king') {
+                  addLog(`✨ Aurora Blast! Elf King strikes for ${damage} damage!`);
+                } else if (isUsingGiantSpear) {
                   addLog(`🔱 ${enemy.name} hurls the GIANT SPEAR for ${damage} damage!`);
                 } else {
                   addLog(`💥 ${enemy.name} attacks for ${damage} damage!`);
@@ -1863,162 +2463,105 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 addLog(`🔥 Lava Pebble scorches you! (Burning 3 turns)`);
               }
 
-              // Reflect damage before defense (Thorny Aura)
-              if (hasEquipment('thorny_aura') && damageToHealth > 0) {
-                const reflectDamage = Math.floor(preDefenseDamage * 0.12);
-                if (reflectDamage > 0) {
-                  setEnemies(prev => {
-                    const updated = prev.map(e =>
-                      e.id === enemy.id
-                        ? { ...e, currentHealth: Math.max(0, e.currentHealth - reflectDamage) }
-                        : e
-                    );
-                    const reflectedEnemy = updated.find(e => e.id === enemy.id);
-                    if (reflectedEnemy && reflectedEnemy.currentHealth === 0) {
-                      handleEnemyDefeated(reflectedEnemy, updated);
-                      const stillAlive = updated.filter(e => e.currentHealth > 0);
-                      if (stillAlive.length === 0) {
-                        addLog(`🏆 All enemies defeated! Victory!`);
-                        setTimeout(() => {
-                          if (currentLevel % 3 === 0) {
-                            setShowInterlude(true);
-                          } else {
-                            setShowRewardScreen(true);
-                          }
-                        }, 1000);
-                      }
-                    }
-                    return updated;
-                  });
-                  addLog(`🌹 Thorny Aura reflects ${reflectDamage} damage to ${enemy.name}!`);
+              // Robin Hood AI
+              if (enemy.name === 'Robin Hood') {
+                if (robinHoodRageMeter >= 5) {
+                  // Devastation Shot (Replaces Normal Attack)
+                  setPlayerDevastationTurns(2);
+                  setRobinHoodRageMeter(0);
+                  addLog(`🏹 Robin Hood unleashes DEVASTATION SHOT! You are Devastated for 2 turns!`);
+                  // We don't apply normal damage/effects here, but we can't easily prevent the 'damage' calculated above from applying since we are in the effect phase.
+                  // However, since Devastation is a status effect that deals damage LATER, we might want to also just let the physical arrow hit?
+                  // User did not specify "instead of". We'll assume it's a special move that *applications* the effect.
+                  // If we want to be nice, we could heal the player back the damage amount, but let's leave it as a "Strong Attack".
+                } else {
+                  // Tipped Arrow Logic (Normal Attack)
+                  const debuffs = ['POISON', 'BLEED', 'WEAKNESS', 'SLOW', 'LETHAL_POISON', 'BURN'];
+                  const debuff = debuffs[Math.floor(Math.random() * debuffs.length)];
+                  addLog(`🏹 Tipped Arrow applies ${debuff}!`);
+
+                  if (debuff === 'POISON') { setPlayerPoisonTurns(prev => prev + 3); }
+                  if (debuff === 'BLEED') { setPlayerBleedTurns(prev => prev + 2); }
+                  if (debuff === 'WEAKNESS') { setPlayerWeaknessTurns(prev => prev + 2); }
+                  if (debuff === 'SLOW') { setPlayerSpeedDebuffTurns(prev => prev + 2); }
+                  if (debuff === 'LETHAL_POISON') {
+                    setPlayerPoisonTurns(prev => prev + 2);
+                    setIsPlayerPoisonLethal(true);
+                    addLog('☠️ Lethal Poison applied!');
+                  }
+                  if (debuff === 'BURN') { setPlayerBurnTurns(prev => prev + 3); }
+
+                  // Increment Rage
+                  setRobinHoodRageMeter(prev => Math.min(5, prev + 1));
+                  addLog(`😡 Robin Hood's rage builds... (${Math.min(5, robinHoodRageMeter + 1)}/5)`);
                 }
               }
 
-              // Passive: Righteous Fury (Lyanna) - 20% chance to burn enemy when they attack
-              if (hero.uniqueAbility?.id === 'righteous_fury' && Math.random() < 0.20) {
-                setEnemies(prev => prev.map(e =>
-                  e.id === enemy.id
-                    ? { ...e, burnTurns: 3 }
-                    : e
-                ));
-                addLog(`🔥 Righteous Fury! ${enemy.name} is burned!`);
+              // Elf Archer: 10% chance to summon Pixie on hit
+              if (enemy.name === 'Elf Archer' && Math.random() < 0.1) {
+                const aliveEnemies = enemiesRef.current.filter(e => e.currentHealth > 0);
+                if (aliveEnemies.length < 5) { // Max 5 enemies
+                  const pixieId = `pixie_${Math.floor(Math.random() * 1000)}`;
+                  const pixie: RuntimeEnemy = {
+                    id: pixieId,
+                    name: 'Pixie',
+                    maxHealth: 30,
+                    currentHealth: 30,
+                    attack: 0,
+                    defense: 50,
+                    baseDamage: 0,
+                    speed: 15,
+                    shield: 0,
+                    type: 'ENEMY', // REGULAR is not a valid type
+                    traitId: 'healing_pixie',
+                    traitName: 'Healing Pixie',
+                    traitDescription: 'Heals the Elf Archer for 30 HP every turn.',
+                    weaknessTurns: 0,
+                    poisonTurns: 0,
+                    slowedTurns: 0,
+                    stunTurns: 0,
+                    burnTurns: 0,
+                    iceStormTurns: 0,
+                    standoffTurns: 0
+                  };
+                  setEnemies(prev => [...prev, pixie]);
+                  addLog('🧚 Elf Archer summons a Pixie!');
+                }
               }
 
-              // Lord Inferno lifesteal (12% default, 50% when desperate)
-              if (enemy.name === 'Lord Inferno' && damageToHealth > 0) {
-                const lifestealed = Math.floor(damageToHealth * lifestealePercent);
-                setEnemies(prev => prev.map(e =>
-                  e.name === 'Lord Inferno'
-                    ? { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + lifestealed) }
-                    : e
-                ));
-                addLog(`🔴 Lord Inferno leeches ${lifestealed} HP from the wound!`);
+              // Moss Golem: Dangerous Smell
+              if (enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
+                const isLethal = Math.random() < 0.1;
+                setPlayerPoisonTurns(3);
+                setIsPlayerPoisonLethal(isLethal);
+                if (isLethal) {
+                  addLog(`🤢 ${enemy.name}'s Dangerous Smell inflicts LETHAL Poison! (8% Max HP/turn)`);
+                } else {
+                  addLog(`🤢 ${enemy.name}'s Dangerous Smell inflicts Poison!`);
+                }
               }
 
-              // Giant Spear 50% chance to attack again (with delay, can chain)
-              if (isUsingGiantSpear && Math.random() < 0.5) {
-                const performSpearChain = (attackNumber: number) => {
-                  setTimeout(() => {
-                    addLog(`🔱 Giant Spear triggers! Attacking again!`);
-                    // Perform another attack after delay
-                    const { damage: chainDamage, preDefenseDamage: chainPreDefenseDamage } = calculateEnemyDamage(baseDamageForAttack, attackStat, defenseForDamage, false);
-                    let reducedChainDamage = applyTurtleShellReduction(chainDamage);
-                    if (channelingGuardActive) {
-                      reducedChainDamage = Math.floor(reducedChainDamage * 0.5);
-                      addLog(`✨ Channeling reduces ${enemy.name}'s damage by 50%!`);
-                    }
-                    setPlayerHealth((prevHealth) => {
-                      const newHealth = Math.max(0, prevHealth - reducedChainDamage);
-                      playerHealthRef.current = newHealth;
-
-                      if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
-                        const reviveHealth = resolveCedricBeastDeath();
-                        if (reviveHealth !== null) {
-                          playerHealthRef.current = reviveHealth;
-                          return reviveHealth;
-                        }
-                        const soulReviveHealth = resolveClydeSoulRevive();
-                        if (soulReviveHealth !== null) {
-                          playerHealthRef.current = soulReviveHealth;
-                          return soulReviveHealth;
-                        }
-                        startDefeatTransition(800);
-                      }
-
-                      return newHealth;
-                    });
-                    addLog(`💥 ${enemy.name} attacks again for ${reducedChainDamage} damage!`);
-
-                    if (hasEquipment('thorny_aura') && chainDamage > 0) {
-                      const reflectDamage = Math.floor(chainPreDefenseDamage * 0.12);
-                      if (reflectDamage > 0) {
-                        setEnemies(prev => {
-                          const updated = prev.map(e =>
-                            e.id === enemy.id
-                              ? { ...e, currentHealth: Math.max(0, e.currentHealth - reflectDamage) }
-                              : e
-                          );
-                          const reflectedEnemy = updated.find(e => e.id === enemy.id);
-                          if (reflectedEnemy && reflectedEnemy.currentHealth === 0) {
-                            handleEnemyDefeated(reflectedEnemy, updated);
-                            const stillAlive = updated.filter(e => e.currentHealth > 0);
-                            if (stillAlive.length === 0) {
-                              addLog(`🏆 All enemies defeated! Victory!`);
-                              setTimeout(() => {
-                                if (currentLevel % 3 === 0) {
-                                  setShowInterlude(true);
-                                } else {
-                                  setShowRewardScreen(true);
-                                }
-                              }, 1000);
-                            }
-                          }
-                          return updated;
-                        });
-                        addLog(`🌹 Thorny Aura reflects ${reflectDamage} damage to ${enemy.name}!`);
-                      }
-                    }
-
-                    // Apply lifesteal for chained attack
-                    if (enemy.name === 'Lord Inferno' && chainDamage > 0) {
-                      const chainLifestealed = Math.floor(chainDamage * lifestealePercent);
-                      setEnemies(prev => prev.map(e =>
-                        e.name === 'Lord Inferno'
-                          ? { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + chainLifestealed) }
-                          : e
-                      ));
-                      addLog(`🔴 Lord Inferno leeches ${chainLifestealed} HP from the wound!`);
-                    }
-
-                    // Check if spear triggers again to chain
-                    if (Math.random() < 0.4) {
-                      performSpearChain(attackNumber + 1);
-                    }
-                  }, 600); // Delay for each spear attack in chain
-                };
-
-                performSpearChain(2);
+              if (magicBurstWeaknessChance > 0 && Math.random() < magicBurstWeaknessChance) {
+                setPlayerWeaknessTurns(2);
+                addLog('💀 Magic Burst weakens you for 2 turns!');
               }
-            }
-
-            if (magicBurstWeaknessChance > 0 && Math.random() < magicBurstWeaknessChance) {
-              setPlayerWeaknessTurns(2);
-              addLog('💀 Magic Burst weakens you for 2 turns!');
-            }
-          }
+            } // CLOSE if (enemy && enemy.currentHealth > 0)
+          } // CLOSE else (permafrost negated)
 
           if (index === aliveEnemies.length - 1) {
             setTimeout(() => endEnemyTurn(), 500);
           }
-        }, 300);
+        }, index * 300);
       });
 
       if (artifacts['golden_apple']) {
-        const healPercent = 0.08 * artifacts['golden_apple'];
-        const healAmount = Math.floor(maxPlayerHealth * healPercent);
+        const healPercent = 0.04 * artifacts['golden_apple'];
+        let healAmount = Math.floor(maxPlayerHealth * healPercent);
+        healAmount = calculateHeal(healAmount); // Elf King Reduction
+        healAmount = Math.max(0, healAmount); // Prevent negative healing
         setPlayerHealth(prev => {
           const newHealth = Math.min(maxPlayerHealth, prev + healAmount);
-          if (newHealth !== prev) {
+          if (healAmount > 0 && newHealth !== prev) {
             addLog(`🍎 Golden Apple heals you for ${healAmount} HP!`);
           }
           return newHealth;
@@ -2110,7 +2653,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Passive: Divine Grace (Seraphina) - Heal 2 HP every turn
     if (hero.uniqueAbility?.id === 'divine_grace') {
-      const healAmount = 2;
+      const healAmount = calculateHeal(2);
       setPlayerHealth(prev => {
         const newHealth = Math.min(maxPlayerHealth, prev + healAmount);
         if (newHealth !== prev) {
@@ -2123,7 +2666,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (hasEquipment('movie_popcorn')) {
       if (popcornEatenThisLevel < 4) {
         setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 1 }));
-        setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + 1));
+        setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + calculateHeal(1)));
         setPopcornEatenThisLevel(prev => prev + 1);
         addLog(`🥚 Dozens of Eggs: +1 Max HP (${popcornEatenThisLevel + 1}/4).`);
         // Only allow Lucky Egg proc if still under cap
@@ -2132,7 +2675,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           const salmonellaLoss = Math.floor(boostedMaxHealth * 0.2);
           setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 12 }));
           setPlayerHealth(prev => {
-            const afterBonus = Math.min(boostedMaxHealth, prev + 12);
+            const afterBonus = Math.min(boostedMaxHealth, prev + calculateHeal(12));
             return Math.max(1, afterBonus - salmonellaLoss);
           });
           addLog(`🥚 Lucky Eggs! +12 Max HP, but Salmonella hits (-20% HP).`);
@@ -2174,6 +2717,18 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Passive: Predator's Instinct (Gareth) - Gain 20% more resource on enemy defeat
     // Handled in handleEnemyDefeated
+
+    // Eli Grassylocks: Regenerate Shield if inactive
+    if (hero.id === 'eli' && !eliShieldActive) {
+      const regenAmount = 20; // Changed from 20% to flat 20
+      setEliShieldCharge(prev => {
+        const newCharge = Math.min(maxEliShield, prev + regenAmount);
+        if (newCharge > prev) {
+          addLog(`🛡️ Grassylocks' Shield regenerates ${newCharge - prev} shield! (Charge: ${newCharge}/${maxEliShield})`);
+        }
+        return newCharge;
+      });
+    }
 
     // Decrement block cooldown
     setBlockCooldownTurns(prev => Math.max(0, prev - 1));
@@ -2327,11 +2882,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         applyBloodVileLifesteal(damage, isCritical);
         maybeTriggerSharpRazor(isCritical);
 
-        // Blood Bullets Passive (Fredrinn)
+        // Bullet Vamp (Fredrinn) - Heal 10% of damage dealt
         if (hero.uniqueAbility?.id === 'bullet_vamp') {
-          const healAmt = Math.ceil(damage * 0.08);
-          if (healAmt > 0) {
-            setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
+          const healAmount = calculateHeal(Math.floor(damage * 0.10));
+          if (healAmount > 0) {
+            setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
+            addLog(`🩸 Bullet Vamp heals for ${healAmount} HP!`);
           }
         }
 
@@ -2340,9 +2896,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         targetCurrentHealth = Math.max(0, targetCurrentHealth - damage);
 
         // Ring of Power: Execute below 10%
-        if (hasEquipment('ring_of_power') && targetCurrentHealth > 0 && targetCurrentHealth <= target.maxHealth * 0.10) {
+        const ringThreshold = 0.10 + ringThresholdBonusRef.current;
+        if (hasEquipment('ring_of_power') && targetCurrentHealth > 0 && targetCurrentHealth <= target.maxHealth * ringThreshold) {
           targetCurrentHealth = 0;
-          addLog(`💍 Ring of Power executes ${target.name}!`);
+          setRingThresholdBonus(prev => prev + 0.005);
+          ringThresholdBonusRef.current += 0.005;
+          addLog(`💍 Ring of Power executes ${target.name}! (Threshold: ${(ringThreshold * 100).toFixed(1)}%)`);
         }
 
         if (isCritical) {
@@ -2464,9 +3023,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         maybeTriggerSharpRazor(isCritical);
 
         if (hero.uniqueAbility?.id === 'bullet_vamp') {
-          const healAmt = Math.ceil(damage * 0.08);
+          const healAmt = calculateHeal(Math.ceil(damage * 0.08));
           if (healAmt > 0) {
             setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
+            addLog(`🩸 Bullet Vamp heals for ${healAmt} HP!`);
           }
         }
 
@@ -2478,9 +3038,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`🟣 Soul +1`);
         }
 
-        if (hasEquipment('ring_of_power') && targetCurrentHealth > 0 && targetCurrentHealth <= target.maxHealth * 0.10) {
+        const ringThreshold = 0.10 + ringThresholdBonusRef.current;
+        if (hasEquipment('ring_of_power') && targetCurrentHealth > 0 && targetCurrentHealth <= target.maxHealth * ringThreshold) {
           targetCurrentHealth = 0;
-          addLog(`💍 Ring of Power executes ${target.name}!`);
+          setRingThresholdBonus(prev => prev + 0.005);
+          ringThresholdBonusRef.current += 0.005;
+          addLog(`💍 Ring of Power executes ${target.name}! (Threshold: ${(ringThreshold * 100).toFixed(1)}%)`);
         }
 
         if (isCritical) {
@@ -2667,9 +3230,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         target.currentHealth = Math.max(0, target.currentHealth - damage);
 
         // Ring of Power: Execute below 10%
-        if (hasEquipment('ring_of_power') && target.currentHealth > 0 && target.currentHealth <= target.maxHealth * 0.10) {
+        const ringThreshold = 0.10 + ringThresholdBonusRef.current;
+        if (hasEquipment('ring_of_power') && target.currentHealth > 0 && target.currentHealth <= target.maxHealth * ringThreshold) {
           target.currentHealth = 0;
-          addLog(`💍 Ring of Power executes ${target.name}!`);
+          setRingThresholdBonus(prev => prev + 0.005);
+          ringThresholdBonusRef.current += 0.005;
+          addLog(`💍 Ring of Power executes ${target.name}! (Threshold: ${(ringThreshold * 100).toFixed(1)}%)`);
         }
 
         if (isCritical) {
@@ -2735,7 +3301,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setPlayerResource(prev => Math.max(0, prev - move.cost));
       const target = enemies.find(e => e.id === selectedTargetId);
       if (target) {
-        let damage = calculateCritDamage(move.baseDamage || 30, attackToUse, target.defense);
+        let damage = calculateCritDamage(move.baseDamage || 30, attackToUse, target);
         damage = applyFireLizardRepeatReduction(target, move.id, damage);
         setLastMoveIdByEnemy(prev => ({ ...prev, [target.id]: move.id }));
         lastMoveIdByEnemyRef.current = { ...lastMoveIdByEnemyRef.current, [target.id]: move.id };
@@ -2763,6 +3329,33 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         let currentEnemyShield = e.shield || 0;
         let newShield = currentEnemyShield;
         let damageRemaining = damage;
+
+        // Protective Veil Logic: 30% Damage Reduction if Shield Fairy is alive
+        const hasProtectiveVeil = enemies.some(ally =>
+          ally.currentHealth > 0 &&
+          (ally.traitId === 'protective_veil' || ally.name === 'Shield Fairy') // Robust check
+        );
+
+        if (hasProtectiveVeil) {
+          const originalDamage = damageRemaining;
+          damageRemaining = Math.floor(damageRemaining * 0.7);
+          // Only log once per attack if possible, but map runs for each enemy.
+          // However, applyPlayerAttackToEnemy is called once per target usually.
+          // We can't easily log here without spamming if it's AOE.
+          // But this function is usually for single target or mapped externaly?
+          // Actually applyPlayerAttackToEnemy sends 'setEnemies(updatedEnemies)' so it runs once.
+          // Wait, applyPlayerAttackToEnemy takes `target` (singular).
+          // So this is per target.
+          if (damageRemaining < originalDamage) {
+            // We can't log nicely inside map return without side effects or ref setup.
+            // Logic is fine though.
+          }
+        }
+
+        // Log it outside if needed, or just let the damage number speak.
+        // Let's add a small floating text check or just rely on log if we can.
+        // Actually, let's keep it simple first.
+
         let newHealth = e.currentHealth;
 
         if (currentEnemyShield > 0) {
@@ -2823,6 +3416,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Track resource refund status for early exits
     let resourceRefunded = false;
 
+    // Only record player's last move for mimicry if it's a real move (not a dev cheat, not a failed action)
+    if (!move.id.startsWith('dev_') && !move.id.startsWith('cheat_') && move.id !== 'invalid' && move.id !== 'none') {
+      setLastPlayerMoveId(move.id);
+    }
+
     // Check if player has enough resource
     if (move.id === 'training') { // Assuming 'training' is the ID for the training move
       if (hasLavaGolem()) {
@@ -2863,6 +3461,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
+    if (isBuffMove && enemies.some(e => e.name === 'Lost Hunter' && e.currentHealth > 0)) {
+      setPlayerBleedTurns(2);
+      addLog(`🐻 Lost Hunter throws a Bear Trap! You are bleeding!`);
+    }
+
     if (hasJester() && isBuffMove) {
       if (buffMoveUsageCount >= 3) {
         addLog(`❌ You can only use 3 buff moves per level! (${buffMoveUsageCount}/3)`);
@@ -2895,7 +3498,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     // Check if player has enough resource for other moves
-    if (playerResource < move.cost) {
+    if (playerResource < move.cost && manaSurgeTurns === 0) {
       addLog(`❌ Not enough ${resourceType}! Need ${move.cost}, have ${playerResource}.`);
       return;
     }
@@ -2947,7 +3550,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
     }
 
-    if (!resourceRefunded && move.id !== 'six_round' && move.id !== 'bullet_storm') {
+    if (!resourceRefunded && move.id !== 'six_round' && move.id !== 'bullet_storm' && move.id !== 'spare_bullet') {
       // Resource deduction moved to specific blocks to prevent energy loss on failed moves.
     }
 
@@ -2976,7 +3579,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               addLog(`❤️ Healed 10% HP & Gained +5 Attack!`);
 
               // Trigger Effect
-              const healAmt = Math.floor(maxPlayerHealth * 0.10);
+              const healAmt = calculateHeal(Math.floor(maxPlayerHealth * 0.10));
               setPlayerHealth(current => Math.min(maxPlayerHealth, current + healAmt));
               setPermanentUpgrades(u => ({ ...u, attackBonus: u.attackBonus + 5 }));
 
@@ -3042,7 +3645,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`🎻 Violin Switch! Gained +5 Notes & +5 Attack!`);
         } else {
           // Keyboard Bonus: Heal 15% Max HP
-          const healAmt = Math.floor(maxPlayerHealth * 0.15);
+          const healAmt = calculateHeal(Math.floor(maxPlayerHealth * 0.15));
           setPlayerHealth(curr => Math.min(maxPlayerHealth, curr + healAmt));
           addLog(`🎹 Piano Switch! Healed ${healAmt} HP!`);
         }
@@ -3128,6 +3731,174 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Gunslinger Move: Bullet Storm
     if (move.id === 'bullet_storm') {
       performBulletStorm();
+      return;
+    }
+
+    // --- STAGE 4 MOVES ---
+
+    // Warrior: Windswept Fury (AOE)
+    if (move.id === 'windswept_fury') {
+      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+
+      const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
+      let totalFuryDamage = 0;
+      const damageMap: Record<string, number> = {};
+
+      addLog(`🌪️ Windswept Fury! Attacking ALL enemies!`);
+
+      // Unholy Headpiece check
+      let damageMultiplier = 1;
+      if (hasEquipment('unholy_headpiece')) {
+        const hpCost = Math.floor(maxPlayerHealth * 0.08);
+        setPlayerHealth(prev => Math.max(1, prev - hpCost));
+        damageMultiplier = 1.3;
+        addLog(`👹 Unholy Headpiece sacrifices ${hpCost} HP for power!`);
+      }
+
+      aliveEnemies.forEach(e => {
+        const critRoll = rollD20(true);
+        const isCritical = critRoll === 20 || consumeGuaranteedCrit();
+
+        let damage = isCritical
+          ? calculateCritDamage(80, attackToUse, e.defense)
+          : calculateDamage(80, attackToUse, e.defense);
+
+        damage = Math.floor(damage * damageMultiplier);
+        damage = applyFireLizardRepeatReduction(e, move.id, damage);
+
+        applyBloodVileLifesteal(damage, isCritical);
+        maybeTriggerSharpRazor(isCritical);
+
+        damageMap[e.id] = damage;
+        totalFuryDamage += damage;
+
+        if (isCritical) addLog(`💥 CRITICAL! ${e.name} takes ${damage} damage!`);
+        else addLog(`⚔️ ${e.name} takes ${damage} damage!`);
+      });
+
+      setTotalDamageDealt(prev => prev + totalFuryDamage);
+
+      const updated = enemies.map(e => {
+        if (damageMap[e.id]) {
+          return { ...e, currentHealth: Math.max(0, e.currentHealth - damageMap[e.id]) };
+        }
+        return e;
+      });
+
+      setEnemies(updated);
+      decrementCooldowns();
+      setIsPlayerTurn(false);
+      enemyTurn(updated, false, false);
+      return;
+    }
+
+    // Mage: Mana Surge (Buff)
+    if (move.id === 'mana_surge') {
+      // Costs mana to cast, then grants free spells
+      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+
+      setManaSurgeTurns(3);
+      addLog(`✨ Mana Surge activated! Your moves cost 0 Mana for 3 turns!`);
+
+      decrementCooldowns();
+      setIsPlayerTurn(false);
+      enemyTurn(undefined, false, false);
+      return;
+    }
+
+    // Rogue: Speed Blitz (Speed Scaling)
+    if (move.id === 'speed_blitz') {
+      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+
+      const target = enemies.find(e => e.id === effectiveTargetId)!;
+      const speedBonus = Math.floor(effectiveSpeed * 0.2);
+      const baseDmg = 50 + speedBonus;
+
+      const critRoll = rollD20(true);
+      const isCritical = critRoll === 20 || consumeGuaranteedCrit();
+
+      let damage = isCritical
+        ? calculateCritDamage(baseDmg, attackToUse, target.defense)
+        : calculateDamage(baseDmg, attackToUse, target.defense);
+
+      damage = applyFireLizardRepeatReduction(target, move.id, damage);
+      applyBloodVileLifesteal(damage, isCritical);
+      maybeTriggerSharpRazor(isCritical);
+
+      addLog(`⚡ Speed Blitz! ${speedBonus} bonus damage from speed!`);
+      if (isCritical) addLog(`💥 CRITICAL! ${target.name} takes ${damage} damage!`);
+      else addLog(`⚔️ ${target.name} takes ${damage} damage!`);
+
+      applySingleTargetDamage(target, damage);
+      return;
+    }
+
+    // Paladin: Hammer Combo
+    if (move.id === 'hammer_combo') {
+      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+
+      if (hammerComboStage === 0) {
+        // Stage 1: Single Target 30 dmg
+        const target = enemies.find(e => e.id === effectiveTargetId)!;
+        const isCritical = consumeGuaranteedCrit();
+        let damage = isCritical
+          ? calculateCritDamage(30, attackToUse, target.defense)
+          : calculateDamage(30, attackToUse, target.defense);
+        damage = applyFireLizardRepeatReduction(target, move.id, damage);
+
+        addLog(`🔨 Hammer Combo (Part 1): Smite!`);
+        addLog(`⚔️ ${target.name} takes ${damage} damage!`);
+
+        setHammerComboStage(1);
+        applySingleTargetDamage(target, damage);
+      } else {
+        // Stage 2: AOE 50 dmg + Heal 40
+        const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
+        let totalDmg = 0;
+        const damageMap: Record<string, number> = {};
+
+        addLog(`🔨 Hammer Combo (Part 2): GRAND SLAM!`);
+
+        aliveEnemies.forEach(e => {
+          let damage = calculateDamage(50, attackToUse, e.defense);
+          damage = applyFireLizardRepeatReduction(e, move.id, damage);
+          damageMap[e.id] = damage;
+          totalDmg += damage;
+          addLog(`⚔️ ${e.name} takes ${damage} damage!`);
+        });
+
+        const healAmount = calculateHeal(40);
+        setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
+        addLog(`💚 Grand Slam heals you for ${healAmount} HP!`);
+
+        setHammerComboStage(0); // Reset
+
+        const updated = enemies.map(e => {
+          if (damageMap[e.id]) {
+            return { ...e, currentHealth: Math.max(0, e.currentHealth - damageMap[e.id]) };
+          }
+          return e;
+        });
+
+        setEnemies(updated);
+        decrementCooldowns();
+        setIsPlayerTurn(false);
+        enemyTurn(updated, false, false);
+      }
+      return;
+    }
+
+    // Gunslinger: Spare Bullet (Buff)
+    if (move.id === 'spare_bullet') {
+      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+
+      setGuaranteedCrit(true);
+      guaranteedCritRef.current = true;
+      addLog(`🤠 Spare Bullet! You load a lucky round. Next hit is GUARANTEED CRITICAL!`);
+
+      decrementCooldowns();
+      setIsPlayerTurn(false);
+      enemyTurn(undefined, false, false);
       return;
     }
 
@@ -3222,7 +3993,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               // Calculate final damage
               const baseDamage = Math.max(0, spaceCount);
               const critRoll = rollD20(true);
-              const isCritical = critRoll === 20;
+              const isCritical = critRoll === 20 || consumeGuaranteedCrit();
               if (isCritical) {
                 addLog('[DEBUG] Calling maybeApplyBeerBoost from Outrage blast');
                 maybeApplyBeerBoost();
@@ -3243,7 +4014,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               let totalOutrageDamage = 0;
               const outrageDamageEntries: string[] = [];
               const outrageAttack = attackToUseRef.current;
-              const outrageAttackBoost = Math.floor(outrageAttack * 0.4);
+              const outrageAttackBoost = Math.floor(outrageAttack * 0.25);
               const updatedEnemies = enemies.map(e => {
                 if (aliveEnemies.find(ae => ae.id === e.id)) {
                   let damage = isCritical
@@ -3264,7 +4035,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               }
 
               // Boss Charge Count Increment (for Outrage on boss)
-              const bossHitByOutrage = aliveEnemies.find(e => e.type === 'BOSS');
+              const bossHitByOutrage = aliveEnemies.find(e => e.type === 'BOSS' && e.name !== 'Robin Hood');
               if (bossHitByOutrage) {
                 setBossChargeCount(prev => {
                   const boss = aliveEnemies.find(e => e.type === 'BOSS');
@@ -3356,8 +4127,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`🎁 Gift from the Gods! Gained 100 Shield!`);
       } else {
         setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + 100 }));
-        setPlayerHealth(prev => prev + 100);
-        addLog(`🎁 Gift from the Gods! Gained 100 Max HP!`);
+        // Also heal the amount gained, subject to reduction?
+        // Usually Max HP gain comes with current HP gain.
+        // "Gain either 100 Shield or 100 Max HP."
+        // If I gain Max HP, do I heal? Usually yes in this game (e.g. Iron Will).
+        const healAmt = calculateHeal(100);
+        setPlayerHealth(prev => prev + healAmt);
+        addLog(`🎁 Gift from the Gods! Gained 100 Max HP and healed ${healAmt}!`);
       }
       decrementCooldowns();
       setIsPlayerTurn(false);
@@ -3475,7 +4251,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       // Special handling for Smite (scaled by enemy max HP)
       if (move.id === 'smite') {
         const target = enemies.find(e => e.id === effectiveTargetId)!;
-        const isCritical = false;
+        const isCritical = consumeGuaranteedCrit();
 
         let damageMultiplier = 1;
         if (hasEquipment('unholy_headpiece')) {
@@ -3488,7 +4264,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         // Smite deals 60% of enemy max HP as base damage, scaled by attack and defense
         const smiteBaseDmg = Math.floor(target.maxHealth * 0.6);
         let damage: number;
-        damage = calculateDamage(smiteBaseDmg, attackToUse, target.defense);
+        damage = calculateDamage(smiteBaseDmg, attackToUse, target);
 
         damage = Math.floor(damage * damageMultiplier);
         damage = Math.floor(damage * channelingMultiplier);
@@ -3566,8 +4342,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           if (enemy.currentHealth <= 0) return enemy;
 
           let damage = isCritical
-            ? calculateCritDamage(damageAmount, attackToUse, enemy.defense)
-            : calculateDamage(damageAmount, attackToUse, enemy.defense);
+            ? calculateCritDamage(damageAmount, attackToUse, enemy)
+            : calculateDamage(damageAmount, attackToUse, enemy);
           if (tideCallEmpowered) {
             damage = Math.floor(damage * 1.5);
           }
@@ -3671,10 +4447,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
         let damage: number;
         if (isCritical && move.critDamageMultiplier) {
-          const baseDamage = calculateDamage(damageAmount, attackToUse, target.defense);
+          const baseDamage = calculateDamage(damageAmount, attackToUse, target);
           damage = Math.floor(baseDamage * move.critDamageMultiplier);
         } else {
-          damage = calculateDamage(damageAmount, attackToUse, target.defense);
+          damage = calculateDamage(damageAmount, attackToUse, target);
         }
 
         damage = applyTideCallBonus(damage);
@@ -3748,7 +4524,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         const damageMap = enemies
           .filter(e => e.currentHealth > 0)
           .map(enemy => {
-            const baseDamage = calculateDamage(baseDamagePerTurn, attackToUse, enemy.defense);
+            const baseDamage = calculateDamage(baseDamagePerTurn, attackToUse, enemy);
             let damage = applyFireLizardRepeatReduction(enemy, move.id, baseDamage);
             damage = Math.floor(damage * channelingMultiplier);
             applyBloodVileLifesteal(damage, false);
@@ -3772,7 +4548,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           });
 
           // Boss Charge Count Increment (for Ice Storm on boss - only on initial hit)
-          const bossHitByIceStorm = prev.find(e => e.type === 'BOSS' && damageMap.some(d => d.enemyId === e.id && d.damage > 0));
+          const bossHitByIceStorm = prev.find(e => e.type === 'BOSS' && e.name !== 'Robin Hood' && damageMap.some(d => d.enemyId === e.id && d.damage > 0));
           if (bossHitByIceStorm) {
             setBossChargeCount(prev => {
               const boss = bossHitByIceStorm;
@@ -3807,6 +4583,28 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`❄️ Turn 1/5: Ice Storm deals ${Math.ceil(totalInitialDamage / (aliveEnemyCount || 1))} damage to all enemies!`);
         setTotalDamageDealt(prev => prev + totalInitialDamage);
         consumePlayerWeaknessTurn();
+        decrementCooldowns();
+        setIsPlayerTurn(false);
+        enemyTurn(undefined, false, false);
+        return;
+      }
+
+      // Special handling for Spare Bullet (Gunslinger)
+      if (move.id === 'spare_bullet') {
+        const bulletsToReload = 1;
+        setPlayerResource(prev => Math.min(maxPlayerResource, prev + bulletsToReload));
+        setGuaranteedCrit(true);
+        addLog(`💀 Spare Bullet! Reloaded 1 Critical Bullet!`);
+        decrementCooldowns();
+        setIsPlayerTurn(false);
+        enemyTurn(undefined, false, false);
+        return;
+      }
+
+      // Special handling for Mana Surge (Mage)
+      if (move.id === 'mana_surge') {
+        setManaSurgeTurns(3);
+        addLog(`✨ Mana Surge! Your next 3 moves cost 0 Mana!`);
         decrementCooldowns();
         setIsPlayerTurn(false);
         enemyTurn(undefined, false, false);
@@ -3861,8 +4659,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         aliveEnemies.forEach(enemy => {
           if (move.baseDamage === undefined) return;
           let damage = isCritical
-            ? calculateCritDamage(move.baseDamage, attackToUse, enemy.defense)
-            : calculateDamage(move.baseDamage, attackToUse, enemy.defense);
+            ? calculateCritDamage(move.baseDamage, attackToUse, enemy)
+            : calculateDamage(move.baseDamage, attackToUse, enemy);
 
           damage = Math.floor(damage * damageMultiplier);
           damage = applyTideCallBonus(damage);
@@ -3938,7 +4736,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (hasEquipment('ring_of_power') && newHealth > 0 && newHealth <= e.maxHealth * ringThreshold) {
               newHealth = 0;
               setRingThresholdBonus(prev => prev + 0.005);
-              addLog(`💍 Ring of Power executes ${e.name}! (Threshold increased!)`);
+              addLog(`💍 Ring of Power executes ${e.name}! (Threshold: ${(ringThreshold * 100).toFixed(1)}%)`);
             }
             return { ...e, currentHealth: newHealth };
           }
@@ -3972,7 +4770,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           });
 
           // Boss Charge Count Increment (for AOE hits on boss)
-          const bossHit = aliveEnemies.find(e => e.type === 'BOSS' && damageMap[e.id] && damageMap[e.id] > 0);
+          const bossHit = aliveEnemies.find(e => e.type === 'BOSS' && e.name !== 'Robin Hood' && damageMap[e.id] && damageMap[e.id] > 0);
           if (bossHit) {
             setBossChargeCount(prev => {
               const boss = bossHit;
@@ -3987,7 +4785,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           }
 
           // Boss Desperation Trait (AOE path)
-          const boss = updated.find(e => e.type === 'BOSS');
+          const boss = updated.find(e => e.type === 'BOSS' && e.name !== 'Robin Hood');
           if (boss && !bossDespTriggered && boss.currentHealth > 0) {
             const hpPercent = boss.currentHealth / boss.maxHealth;
             if (hpPercent <= 0.2) {
@@ -4096,9 +4894,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       let damage: number;
       if (isCritical) {
-        damage = calculateCritDamage(move.baseDamage || 0, attackToUse, target.defense);
+        damage = calculateCritDamage(move.baseDamage || 0, attackToUse, target);
       } else {
-        damage = calculateDamage(move.baseDamage || 0, attackToUse, target.defense);
+        damage = calculateDamage(move.baseDamage || 0, attackToUse, target);
       }
 
       if (isNaturalCrit && hasEquipment('ancient_rune_stone')) {
@@ -4256,7 +5054,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       // Boss Charge Count Increment (for hits on boss)
       const bossAfterHit = updatedEnemies.find(e => e.id === target.id);
-      if (target.type === 'BOSS' && damage > 0 && bossAfterHit?.currentHealth && bossAfterHit.currentHealth > 0) {
+      if (target.type === 'BOSS' && target.name !== 'Robin Hood' && damage > 0 && bossAfterHit?.currentHealth && bossAfterHit.currentHealth > 0) {
         setBossChargeCount(prev => {
           const boss = target;
           const threshold = getBossRageThreshold(boss?.name || '');
@@ -4270,7 +5068,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
 
       // Check for Boss Desperation and Defeat logic
-      const boss = updatedEnemies.find(e => e.type === 'BOSS');
+      const boss = updatedEnemies.find(e => e.type === 'BOSS' && e.name !== 'Robin Hood');
       if (boss && !bossDespTriggered && boss.currentHealth > 0) {
         const hpPercent = boss.currentHealth / boss.maxHealth;
         if (hpPercent <= 0.2) {
@@ -4356,8 +5154,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         }
 
         let newDefBonus = prev.defenseBonus;
-        if (currentDef < cap) {
-          const inc = Math.min(8, cap - currentDef);
+        const effectiveDefCap = cap + (vineTrapTurns > 0 ? 50 : 0);
+
+        if (currentDef < effectiveDefCap) {
+          const inc = Math.min(8, effectiveDefCap - currentDef);
           newDefBonus += inc;
         }
 
@@ -4380,9 +5180,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setBuffMoveUsageCount((prev) => prev + 1);
     } else if (move.id === 'holy_healing') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      const healAmt = Math.floor(maxPlayerHealth * 0.5);
+      const baseHeal = Math.floor(maxPlayerHealth * 0.5);
+      const healAmt = calculateHeal(baseHeal);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
-      addLog(`💚 Holy Healing! Restored 50% HP (${healAmt} HP)! (-${move.cost} ${resourceType})`);
+      addLog(`💚 Holy Healing! Restored ${healAmt} HP! (-${move.cost} ${resourceType})`);
     } else if (move.id === 'channeling') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       setChannelingGuardActive(true);
@@ -4391,7 +5192,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       addLog('✨ Your next attack will deal 100% more damage.');
     } else if (move.id === 'tide_call') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      const healAmt = Math.floor(maxPlayerHealth * 0.2);
+      const baseHeal = Math.floor(maxPlayerHealth * 0.2);
+      const healAmt = calculateHeal(baseHeal);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       setTideCallActive(true);
       addLog(`🌊 Tide Call! Next attack deals +50% damage and you heal ${healAmt} HP! (-${move.cost} ${resourceType})`);
@@ -4406,7 +5208,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       const defenseIncrease = move.defenseBoost;
       setPlayerDefense((prev) => {
         const currentTotal = prev + permanentUpgrades.defenseBonus;
-        const statCap = getStatCap();
+        const statCap = getStatCap() + (vineTrapTurns > 0 ? 50 : 0);
         if (currentTotal >= statCap) {
           addLog(`🛡️ Defense is already at the cap (${statCap})!`);
           return prev;
@@ -4424,7 +5226,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       // Remove original log as it's handled inside the setter for accuracy
     } else if (move.id === 'health_tonic') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      const healAmt = 36;
+      const healAmt = calculateHeal(36);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       addLog(`💚 You used ${move.name}! Healed for ${healAmt} HP!`);
     }
@@ -4487,7 +5289,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     const isBossLevel = (currentStage === 1 && currentLevel === 10) || (currentStage === 2 && currentLevel === 12);
 
     if (item.id === 'sugarcane') {
-      const healAmt = 80;
+      let healAmt = 80;
+      healAmt = calculateHeal(healAmt);
       const actualHeal = Math.min(healAmt, maxPlayerHealth - playerHealth);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       addLog(`🍬 Used Sugarcane! Restored ${actualHeal} HP!`);
@@ -4542,6 +5345,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         if (item.id === 'apple') actualHealAmt = 16;
         if (item.id === 'bread') actualHealAmt = 24;
         if (item.id === 'health_potion') actualHealAmt = 42;
+
+        actualHealAmt = calculateHeal(actualHealAmt);
 
         const actualHeal = Math.min(actualHealAmt, maxPlayerHealth - playerHealth);
         setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + actualHealAmt));
@@ -4679,12 +5484,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   const proceedToNextLevel = () => {
-    // Award diamonds for beating the level
-    const diamondReward = 5 + (2 * currentLevel);
+    // Award diamonds for beating the level, scaled by difficulty
+    const diffCfg = DIFFICULTY_CONFIG[difficulty] || DIFFICULTY_CONFIG.normal;
+    const baseReward = 5 + (2 * currentLevel);
+    const diamondReward = Math.floor(baseReward * diffCfg.goldMod);
+
     if (onDiamondsEarned) {
       onDiamondsEarned(diamondReward);
     }
-    addLog(`💎 Earned ${diamondReward} Diamonds!`);
+    addLog(`💎 Earned ${diamondReward} Diamonds! (${diffCfg.label} x${diffCfg.goldMod})`);
 
     setIsTransitioning(true);
     setTimeout(() => {
@@ -4697,6 +5505,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           setGiftFromGodsUsedThisStage(false);
           setPermanentUpgrades(prev => {
             const newBonus = prev.healthBonus + 25;
+            // Full heal on stage transition... Does Elf King reduce this?
+            // "Healing reduced by 50%".
+            // Typically Stage Transitions are full restores that override mechanics, but the user said "EVERY other possible forms of healing".
+            // However, Elf King is a specific enemy in Stage 4.
+            // If I am transitioning FROM Stage 1 to 2, Elf King is NOT present.
+            // So logic holds: calculateHeal checks for Elf King. If he's not there, it returns full amount.
+            // But wait, if I am in Stage 4 (Elf King stage) and I somehow get a level up heal?
+            // Code below is for Stage 1->2 transition. Elf King not there.
+            // But let's check the Level Up logic (not stage transition).
             setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus); // Full Heal with new max
             return { ...prev, healthBonus: newBonus };
           });
@@ -4715,8 +5532,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           setCurrentLevel(1);
           setGiftFromGodsUsedThisStage(false);
           const bonusHealth = 50;
-          setPermanentUpgrades(prev => ({ ...prev, healthBonus: prev.healthBonus + bonusHealth }));
-          setPlayerHealth(hero.stats.health + equipHealthBonus + permanentUpgrades.healthBonus + bonusHealth);
+          setPermanentUpgrades(prev => {
+            const newBonus = prev.healthBonus + bonusHealth;
+            setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus);
+            return { ...prev, healthBonus: newBonus };
+          });
           setPlayerResource(maxPlayerResource);
           addLog('❤️ Stage 3 blessing: +50 Max HP and fully restored resources!');
           setShowRewardScreen(false);
@@ -4739,14 +5559,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           setCurrentStage(4);
           setCurrentLevel(1);
           setGiftFromGodsUsedThisStage(false);
-          const bonusHealth = 100;
+          const bonusHealth = 200;
           setPermanentUpgrades(prev => {
             const newBonus = prev.healthBonus + bonusHealth;
             setPlayerHealth(hero.stats.health + equipHealthBonus + newBonus);
             return { ...prev, healthBonus: newBonus };
           });
           setPlayerResource(maxPlayerResource);
-          addLog('❤️ Stage 4 blessing: +100 Max HP and fully restored resources!');
+          addLog('❤️ Stage 4 blessing: +200 Max HP and fully restored resources!');
           loadLevel(1, 4);
           setShowRewardScreen(false);
           setShowShop(true);
@@ -4828,7 +5648,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   const handleRest = () => {
-    const healAmount = Math.floor(maxPlayerHealth * 0.5);
+    const baseHeal = Math.floor(maxPlayerHealth * 0.5);
+    const healAmount = calculateHeal(baseHeal);
     setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
     addLog(`💚 Rested and recovered ${healAmount} HP!`);
     setShowRest(false);
@@ -4869,7 +5690,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setWolfgangNoteMeter(prev => Math.min(100, prev + 1));
   };
 
-
+  // Reset Gift from the Gods when stage changes
+  useEffect(() => {
+    setGiftFromGodsUsedThisStage(false);
+  }, [currentStage]);
 
   // --- Core Game Logic ---
 
@@ -4897,8 +5721,32 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     enemyTurn(enemies, true, false);
   };
 
-  const handleEnemyDefeated = (defeatedEnemy: Enemy, currentEnemies: Enemy[], freshlyOwnedArtifacts: string[] = []) => {
+  const handleEnemyDefeated = (defeatedEnemy: Enemy, currentEnemies: RuntimeEnemy[], freshlyOwnedArtifacts: string[] = []) => {
     const isMinion = defeatedEnemy.type === 'MINION';
+
+    // Thief: Return stolen gold and artifact if defeated -> REMOVED per user request
+    // if (defeatedEnemy.name === 'Thief' && thiefStolenState.gold > 0) {
+    //   setGold(prev => prev + thiefStolenState.gold);
+    //   addLog(`💰 You recovered ${thiefStolenState.gold} Gold from the Thief!`);
+    //   if (thiefStolenState.artifactId) {
+    //     setArtifacts(prev => ({
+    //       ...prev,
+    //       [thiefStolenState.artifactId!]: (prev[thiefStolenState.artifactId!] || 0) + 1
+    //     }));
+    //     const artName = thiefStolenState.artifactId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    //     addLog(`💎 You recovered the ${artName}!`);
+    //   }
+    //   setThiefStolenState({ gold: 0, artifactId: null }); // Reset stolen state
+    // }
+
+    // Giant Spear: 50% chance to drop 10 gold
+    if (defeatedEnemy.name === 'Giant Spear' || defeatedEnemy.name === 'Elite Spear') {
+      if (Math.random() < 0.5) {
+        setGold(prev => prev + 10);
+        addLog(`💰 Found 10 Gold on the ${defeatedEnemy.name}!`);
+      }
+    }
+
 
     if (currentStage === 3 && currentLevel === 4 && !motherGolemSpawned && defeatedEnemy.name === 'Lava Pebble') {
       const motherGolem = {
@@ -4918,6 +5766,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         burnTurns: 0,
         iceStormTurns: 0,
         standoffTurns: 0,
+        speed: 15,
       };
 
       const spawnedPebbles = Array.from({ length: 4 }, (_, i) => ({
@@ -4937,6 +5786,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         burnTurns: 0,
         iceStormTurns: 0,
         standoffTurns: 0,
+        speed: 15,
       }));
 
       currentEnemies.length = 0;
@@ -4948,7 +5798,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
-    if (currentStage === 3 && currentLevel === 15 && !lavaDragonSpawned && defeatedEnemy.name === 'Lava Dragon') {
+    if (currentStage === 3 && !lavaDragonSpawned && defeatedEnemy.name === 'Lava Dragon') {
       const spawnedPebbles = Array.from({ length: 12 }, (_, i) => ({
         id: `dragon_pebble_${i + 1}`,
         name: 'Lava Pebble',
@@ -4966,12 +5816,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         burnTurns: 0,
         iceStormTurns: 0,
         standoffTurns: 0,
+        speed: 15,
       }));
 
-      // Remove only the defeated Lava Dragon, keep other enemies
-      const filteredEnemies = currentEnemies.filter(e => e.id !== defeatedEnemy.id);
-      const newEnemies = [...filteredEnemies, ...spawnedPebbles];
-      setEnemies(newEnemies as any);
+      // Mutate the array in-place so the caller (which holds a reference to currentEnemies) sees the changes check for victory
+      // remove the dragon
+      const index = currentEnemies.findIndex(e => e.id === defeatedEnemy.id);
+      if (index !== -1) {
+        currentEnemies.splice(index, 1);
+      }
+      // Add pebbles
+      currentEnemies.push(...spawnedPebbles);
+
+      // Update state
+      setEnemies([...currentEnemies]);
       setSelectedTargetId(spawnedPebbles[0]?.id || null);
       setLavaDragonSpawned(true);
       addLog('🐉 The Lava Dragon collapses, releasing a swarm of blazing pebbles!');
@@ -5292,7 +6150,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Check for kills after small delay for impact
     setTimeout(() => {
       const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
-      defeated.forEach(e => handleEnemyDefeated(e, updatedEnemies));
+      defeated.forEach(e => handleEnemyDefeated(e, updatedEnemies, []));
 
       if (updatedEnemies.every(e => e.currentHealth === 0)) {
         addLog(`🏆 All enemies defeated! Victory!`);
@@ -5408,16 +6266,21 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   return (
     <div
-      className={`size-full flex flex-col relative overflow-hidden transition-colors duration-1000 ${currentStage === 2 ? 'bg-neutral-950' : 'bg-slate-900'}`}
+      className={`size-full flex flex-col relative overflow-hidden transition-colors duration-1000 ${!activeBackgroundId ? (currentStage === 2 ? 'bg-neutral-950' : 'bg-slate-900') : ''}`}
       style={{
         transform: `translate(${shakeOffsetX}px, ${shakeOffsetY}px)`
       }}
     >
       {/* Gacha Style Background */}
-      {(activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape') && (
+      {/* Gacha Style Background */}
+      {(activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape' || activeStyleId === 'fairy-forest') && (
         <>
           <img
-            src={activeStyleId === 'japanese-mountainscape' ? mountainStyleArt : animeStyleArt}
+            src={
+              activeStyleId === 'japanese-mountainscape' ? mountainStyleArt :
+                activeStyleId === 'fairy-forest' ? animeForestStyleArt :
+                  animeStyleArt
+            }
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none"
           />
@@ -5799,7 +6662,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   // Check for defeated enemies
                   const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
                   defeated.forEach(e => {
-                    handleEnemyDefeated(e, updatedEnemies);
+                    handleEnemyDefeated(e, updatedEnemies, []);
                   });
 
                   const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
@@ -5999,7 +6862,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         )}
       </AnimatePresence>
       {/* Background Layers */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1),rgba(2,6,23,1))]" />
+      {/* If no custom background is passed (or if we want a specific overlay for combat), use a dark overlay to ensure text readability */}
+      <div className={`absolute inset-0 ${activeBackgroundId ? 'bg-slate-950/30' : 'bg-slate-950'}`} />
+
+      {/* Default Gradient only if NO custom background is active (fallback) */}
+      {!activeBackgroundId && (
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1),rgba(2,6,23,1))]" />
+      )}
 
       {/* Nebula Orbs */}
       <motion.div
@@ -6336,639 +7205,56 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   </motion.div>
                 </div>
 
-                {/* Player Stats */}
-                <div className="bg-slate-800/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-5 space-y-3 shadow-xl shadow-black/20">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-5 h-5 text-red-500" />
-                      <span className="text-slate-300 text-sm tracking-wide uppercase">Health</span>
-                    </div>
-                    <span className="text-slate-100">{playerHealth} / {maxPlayerHealth} {playerShield > 0 && <span className="text-blue-400 font-bold">(+ {playerShield} Shield)</span>}</span>
-                  </div>
-                  <div className={`w-full h-4 rounded-full overflow-hidden relative ${permafrostIceActive ? 'bg-blue-600/60 ring-2 ring-cyan-400/50' : 'bg-slate-700'}`}>
-                    <motion.div
-                      animate={dualityForm === 'beast' ? {
-                        x: [0, -1, 1, -1, 1, 0],
-                        y: [0, 0.5, -0.5, 0.5, -0.5, 0]
-                      } : {}}
-                      transition={dualityForm === 'beast' ? {
-                        repeat: Infinity,
-                        duration: 0.15
-                      } : {}}
-                      className="h-full w-full relative"
-                    >
-                      <motion.div
-                        initial={{ width: `${(playerHealth / maxPlayerHealth) * 100}%` }}
-                        animate={{
-                          width: `${(playerHealth / maxPlayerHealth) * 100}%`,
-                          backgroundColor: dualityForm === 'beast' ? ['#dc2626', '#ef4444', '#dc2626'] : '#dc2626'
-                        }}
-                        transition={{
-                          width: { duration: 0.5, ease: "easeOut" },
-                          backgroundColor: { duration: 1, repeat: Infinity }
-                        }}
-                        className={`h-full ${dualityForm === 'beast' ? 'shadow-[0_0_20px_rgba(220,38,38,0.8)]' : ''}`}
-                        style={{ backgroundColor: '#dc2626' }}
-                      />
-                    </motion.div>
-                    {playerShield > 0 && (
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(playerShield / maxPlayerHealth) * 100}%` }}
-                        className="absolute top-0 left-0 h-full bg-blue-500/50"
-                      />
-                    )}
-                    {/* Permafrost Ice Shield - Crystalline Glass Effect */}
-                    {permafrostIceActive && (
-                      <motion.div
-                        initial={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="absolute inset-0 rounded-full overflow-hidden"
-                        style={{
-                          background: 'linear-gradient(135deg, rgba(165, 240, 255, 0.4) 0%, rgba(59, 130, 246, 0.3) 50%, rgba(165, 240, 255, 0.4) 100%)',
-                          backdropFilter: 'blur(2px)',
-                          border: '2px solid rgba(165, 240, 255, 0.6)',
-                          boxShadow: 'inset 0 0 10px rgba(165, 240, 255, 0.5), 0 0 15px rgba(59, 130, 246, 0.4)',
-                          pointerEvents: 'none'
-                        }}
-                      >
-                        <motion.div
-                          animate={{
-                            opacity: [0.3, 0.5, 0.3],
-                          }}
-                          transition={{
-                            duration: 2,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                          }}
-                          className="absolute inset-0"
-                          style={{
-                            backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(165, 240, 255, 0.2) 3px, rgba(165, 240, 255, 0.2) 6px)',
-                          }}
-                        />
-                      </motion.div>
-                    )}
-                  </div>
-
-                  {(playerWeaknessTurns > 0 || playerSpeedDebuffTurns > 0 || playerBurnTurns > 0) && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {playerWeaknessTurns > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="px-2 py-1 rounded-lg border border-purple-500/30 bg-purple-900/20 text-[10px] uppercase tracking-widest text-purple-300 cursor-help">
-                              Weakened ({playerWeaknessTurns})
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent sideOffset={6}>
-                            {DEBUFF_DESCRIPTIONS.weakened}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {playerSpeedDebuffTurns > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="px-2 py-1 rounded-lg border border-cyan-500/30 bg-cyan-900/20 text-[10px] uppercase tracking-widest text-cyan-300 cursor-help">
-                              Webbed ({playerSpeedDebuffTurns})
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent sideOffset={6}>
-                            {DEBUFF_DESCRIPTIONS.webbed}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {playerBurnTurns > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="px-2 py-1 rounded-lg border border-orange-500/30 bg-orange-900/20 text-[10px] uppercase tracking-widest text-orange-300 cursor-help">
-                              Burning ({playerBurnTurns})
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent sideOffset={6}>
-                            {DEBUFF_DESCRIPTIONS.burning}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Resource Bar */}
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-600/30">
-                    <div className="flex items-center gap-2">
-                      <Zap className={`w-5 h-5 ${resourceType === 'Energy' ? 'text-amber-500' : resourceType === 'Bullets' ? 'text-yellow-500' : 'text-purple-500'}`} />
-                      <span className="text-slate-300 text-sm tracking-wide uppercase">{resourceType}</span>
-                    </div>
-                    <span className="text-slate-100">{playerResource} / {maxPlayerResource}</span>
-                  </div>
-                  <div className="w-full h-4 bg-slate-700 rounded-full overflow-hidden">
-                    <motion.div
-                      initial={{ width: `${(playerResource / maxPlayerResource) * 100}%` }}
-                      animate={{ width: `${(playerResource / maxPlayerResource) * 100}%` }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      className={`h-full ${resourceType === 'Energy' ? 'bg-amber-500' : resourceType === 'Bullets' ? 'bg-gradient-to-r from-yellow-500 to-amber-600' : 'bg-purple-600'}`}
-                    />
-                  </div>
-
-                  {/* Bullets Visualization */}
-                  {hero.classId === 'gunslinger' && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-black">Chamber Status</p>
-                        <span className="text-[10px] text-amber-500 font-bold uppercase tracking-tighter">Ready: {playerResource} / {maxPlayerResource}</span>
-                      </div>
-                      <div className="flex gap-1 h-8">
-                        {Array.from({ length: maxPlayerResource }).map((_, i) => {
-                          // Highlight the next guaranteed critical bullet
-                          // Find which absolute bullet number will be critical next
-                          const threshold = (hero.uniqueAbility?.id === 'last_chamber') ? 6 : 10;
-                          const nextCritNum = Math.ceil((bulletsSpent + 1) / threshold) * threshold;
-                          const bulletNum = bulletsSpent + (playerResource - i);
-                          const isCrit = bulletNum === nextCritNum;
-
-                          return (
-                            <div
-                              key={i}
-                              className={`flex-1 rounded-sm border transition-all duration-300 relative overflow-hidden ${i < playerResource
-                                ? isCrit
-                                  ? 'bg-gradient-to-b from-red-500 to-red-700 border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)] animate-pulse'
-                                  : 'bg-gradient-to-b from-yellow-400 to-amber-600 border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]'
-                                : 'bg-slate-900 border-slate-800'
-                                }`}
-                            >
-                              {i < playerResource && (
-                                <div className="absolute top-0 left-0 w-full h-1/3 bg-white/20" />
-                              )}
-                              {/* Optional: Add a small icon or distinct mark for crit bullets for colorblind accessibility */}
-                              {i < playerResource && isCrit && (
-                                <div className="absolute inset-0 flex items-center justify-center opacity-50">
-                                  <div className="w-1 h-1 bg-white rounded-full shadow-[0_0_4px_white]" />
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Passive Ability Display */}
-                  {hero.uniqueAbility && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <p className="text-xs text-purple-400 uppercase mb-2 tracking-wider flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        Passive Ability
-                      </p>
-                      <div className="text-xs bg-purple-900/20 border border-purple-600/20 px-3 py-2 rounded-lg space-y-1">
-                        <p className="text-purple-300 font-bold">{hero.uniqueAbility.name}</p>
-                        <p className="text-slate-400 text-[10px]">{hero.uniqueAbility.description}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  {hero.classId === 'rogue' && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <p className="text-xs text-yellow-400 uppercase mb-2 tracking-wider">Class Trait</p>
-                      <div className="text-xs bg-yellow-900/20 border border-yellow-600/20 px-3 py-2 rounded-lg">
-                        <p className="text-yellow-300 font-bold">Rogue: +20% Crit Chance</p>
-                        <p className="text-slate-400 text-[10px]">Rogues receive an additional +20% critical hit chance (25% total).</p>
-                      </div>
-                      {hero.uniqueAbility?.id === 'shadow_meter' && (
-                        <div className="mt-2 bg-slate-900/40 border border-purple-600/20 px-3 py-2 rounded-lg">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Shadow Meter</p>
-                            <span className="text-[10px] text-purple-300 font-mono">{shadowMeter}/2</span>
-                          </div>
-                          <div className="flex gap-1 h-2">
-                            {[0, 1].map(i => (
-                              <div
-                                key={i}
-                                className={`flex-1 rounded-full border transition-all duration-300 ${i < shadowMeter
-                                  ? 'bg-gradient-to-r from-purple-500 to-indigo-500 border-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.5)]'
-                                  : 'bg-slate-800/80 border-slate-700'
-                                  }`}
-                              />
-                            ))}
-                          </div>
-                          {bonusDodgeChance > 0 && (
-                            <p className="text-[9px] text-purple-300 mt-1 italic">+{bonusDodgeChance}% bonus dodge</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Wolfgang's Note Meter - Unique Ability UI */}
-                  {hero.id === 'wolfgang' && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <p className="text-xs text-purple-400 uppercase mb-2 tracking-wider">Note Meter</p>
-                      <div
-                        className={`relative w-full h-8 bg-slate-900 rounded-lg border-2 ${wolfgangNoteMeter >= 100 ? 'border-purple-400 cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.6)] animate-pulse' : 'border-slate-700'} overflow-hidden transition-all group`}
-                        onClick={handleBurst}
-                      >
-                        {/* Bar */}
-                        <div
-                          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 transition-all duration-300"
-                          style={{ width: `${wolfgangNoteMeter}%` }}
-                        />
-
-                        {/* Text Overlay */}
-                        <div className="absolute inset-0 flex items-center justify-between px-3">
-                          <span className="text-[10px] font-bold text-white drop-shadow-md">
-                            {wolfgangNoteMeter >= 100 ? 'CLICK TO BURST!' : 'Cmd: Symphony'}
-                          </span>
-                          <span className="text-xs font-mono font-bold text-white drop-shadow-md">
-                            {wolfgangNoteMeter}/100 ♫
-                          </span>
-                        </div>
-
-                        {/* Hover info */}
-                        <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-[10px] text-white font-medium">
-                          {wolfgangNoteMeter} Damage Stored
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Lucian's Soul Meter Display */}
-                  {hero.id === 'lucian' && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <SoulMeterUI
-                        currentSoul={lucianSoulMeter}
-                        maxSoul={5000}
-                        attackBonus={Math.floor(lucianSoulMeter / 10)}
-                      />
-                    </div>
-                  )}
-
-                  {/* Cedric's Duality Trait UI (Moon Phase) */}
-                  {hero.id === 'cedric' && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <p className="text-xs text-amber-400 uppercase mb-2 tracking-wider">Class Trait: Moon Phase</p>
-                      <div className="text-xs bg-amber-900/20 border border-amber-600/20 px-3 py-2 rounded-lg">
-                        <div className="flex gap-3 items-center mt-2 justify-center">
-                          {[1, 2, 3, 4].map(i => (
-                            <div
-                              key={i}
-                              className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${i <= dualityMeter
-                                ? 'bg-amber-400 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.6)] scale-110'
-                                : 'bg-slate-800/80 border-slate-700'
-                                }`}
-                            >
-                              <Moon className={`w-5 h-5 ${i <= dualityMeter ? 'text-amber-950 fill-amber-950' : 'text-slate-600'}`} />
-                            </div>
-                          ))}
-                          <div className="ml-2 flex flex-col items-center">
-                            <span className="text-2xl font-black text-amber-100 font-mono leading-none">{dualityMeter}</span>
-                            <span className="text-[9px] text-amber-500 uppercase font-bold">Stacks</span>
-                          </div>
-                        </div>
-                        <p className="text-slate-400 text-[10px] mt-2 italic text-center">
-                          {dualityForm === 'human' ? 'Charge by clicking Punch or winning RPS!' : 'CEDRIC IS IN BEAST FORM'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Wolfgang's Duality Trait UI (Refined & Stylish) */}
-                  {hero.id === 'wolfgang' && (
-                    <div className="pt-4 border-t border-slate-700/50 space-y-3">
-                      {/* 1. Duality Notes Meter (4 Hit Meter) */}
-                      <div>
-                        <div className="flex justify-between items-end mb-1">
-                          <p className="text-[10px] text-cyan-300 uppercase tracking-widest font-bold">Rhythm Flow</p>
-                          <span className={`text-xs font-mono font-bold ${dualityMeter === 4 ? 'text-cyan-400 animate-pulse' : 'text-slate-400'}`}>
-                            {dualityMeter}/4
-                          </span>
-                        </div>
-
-                        <div className="bg-slate-900/80 p-3 rounded-xl border border-cyan-900/30 shadow-inner flex justify-center gap-4">
-                          {[1, 2, 3, 4].map(i => {
-                            const active = i <= dualityMeter;
-                            return (
-                              <div
-                                key={i}
-                                className={`relative w-8 h-8 flex items-center justify-center transition-all duration-300 ${active ? 'scale-110' : 'scale-90 opacity-40'}`}
-                              >
-                                <div className={`absolute inset-0 rounded-full blur-md ${active ? 'bg-cyan-500/40' : 'bg-transparent'}`} />
-                                <Music
-                                  className={`relative z-10 w-6 h-6 ${active ? 'text-cyan-300 fill-cyan-900' : 'text-slate-600'}`}
-                                  strokeWidth={2.5}
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* 2. Instrument Display (Stylish) */}
-                      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-3 rounded-xl border border-slate-700/50 shadow-lg relative overflow-hidden group">
-                        {/* Glow Effect based on Instrument */}
-                        <div className={`absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-transparent to-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none transition-colors duration-500
-                              ${(dualityForm === 'keyboard' || dualityForm === 'human') ? 'to-indigo-500/30' :
-                            dualityForm === 'drums' ? 'to-red-500/30' :
-                              'to-amber-500/30'}`}
-                        />
-
-                        <div className="flex items-center gap-4 relative z-10">
-                          {/* Icons Container */}
-                          <div className="flex gap-3 bg-black/60 p-2 rounded-2xl border border-white/10 backdrop-blur-md shadow-inner">
-                            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${(dualityForm === 'keyboard' || dualityForm === 'human') ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.6)] scale-110 ring-2 ring-indigo-400' : 'bg-slate-800/50 text-slate-600 grayscale opacity-50'}`}>
-                              <span className="text-xl drop-shadow-md">🎹</span>
-                              {(dualityForm === 'keyboard' || dualityForm === 'human') && <div className="absolute -bottom-1 w-4 h-1 bg-indigo-400 rounded-full animate-pulse" />}
-                            </div>
-                            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${dualityForm === 'drums' ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.6)] scale-110 ring-2 ring-red-400' : 'bg-slate-800/50 text-slate-600 grayscale opacity-50'}`}>
-                              <span className="text-xl drop-shadow-md">🥁</span>
-                              {dualityForm === 'drums' && <div className="absolute -bottom-1 w-4 h-1 bg-red-400 rounded-full animate-pulse" />}
-                            </div>
-                            <div className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-500 ${dualityForm === 'violin' ? 'bg-amber-600 text-white shadow-[0_0_15px_rgba(245,158,11,0.6)] scale-110 ring-2 ring-amber-400' : 'bg-slate-800/50 text-slate-600 grayscale opacity-50'}`}>
-                              <span className="text-xl drop-shadow-md">🎻</span>
-                              {dualityForm === 'violin' && <div className="absolute -bottom-1 w-4 h-1 bg-amber-400 rounded-full animate-pulse" />}
-                            </div>
-                          </div>
-
-                          {/* Label */}
-                          <div className="flex flex-col">
-                            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider leading-none mb-1">Active Form</span>
-                            <span className={`text-sm font-black uppercase tracking-widest transition-colors duration-300
-                                      ${(dualityForm === 'keyboard' || dualityForm === 'human') ? 'text-indigo-400 drop-shadow-[0_0_5px_rgba(129,140,248,0.5)]' :
-                                dualityForm === 'drums' ? 'text-red-400 drop-shadow-[0_0_5px_rgba(248,113,113,0.5)]' :
-                                  'text-amber-400 drop-shadow-[0_0_5px_rgba(251,191,36,0.5)]'}`}
-                            >
-                              {dualityForm === 'human' ? 'KEYBOARD' : dualityForm}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Clyde's Duality Trait UI (Sword Slash Meter & Souls) */}
-                  {hero.id === 'clyde' && (
-                    <div className="pt-3 border-t border-slate-600/30 space-y-3">
-                      {/* Ghoul Duality Meter */}
-                      <div className="bg-gradient-to-b from-slate-900/60 to-slate-950/60 p-4 rounded-lg border border-blue-900/40 shadow-lg relative overflow-hidden">
-                        {/* Background glow effect - Blue mystical */}
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-blue-600/15 blur-3xl -mt-20 pointer-events-none" />
-
-                        <div className="relative z-10">
-                          <div className="flex justify-between items-center mb-3">
-                            <p className="text-[10px] text-blue-400 uppercase tracking-widest font-bold flex items-center gap-2">
-                              <div className="w-4 h-4 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-[0_0_8px_rgba(59,130,246,0.6)]" />
-                              Duality Meter
-                            </p>
-                            <span className={`text-xs font-mono font-bold transition-colors ${dualityMeter === 4 ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`}>
-                              {dualityMeter}/4
-                            </span>
-                          </div>
-
-                          {/* Ghoul Sword Symbols Container */}
-                          <div className={`flex gap-3 justify-center ${dualityMeter === 4
-                            ? 'relative'
-                            : ''
-                            }`}>
-                            {/* Intense glow aura when fully charged */}
-                            {dualityMeter === 4 && (
-                              <motion.div
-                                className="absolute -inset-6 blur-2xl bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 rounded-full"
-                                animate={{
-                                  opacity: [0.5, 1, 0.5],
-                                  scale: [1, 1.1, 1]
-                                }}
-                                transition={{
-                                  duration: 1.3,
-                                  repeat: Infinity,
-                                  ease: 'easeInOut'
-                                }}
-                                style={{ pointerEvents: 'none' }}
-                              />
-                            )}
-                            {[1, 2, 3, 4].map((i) => (
-                              <div key={i} className="relative z-10">
-                                {/* Mystical glow for active swords */}
-                                {i <= dualityMeter && (
-                                  <div className={`absolute inset-0 scale-130 animate-pulse ${dualityMeter === 4
-                                    ? 'blur-2xl bg-blue-600/50'
-                                    : 'blur-xl bg-blue-500/25'
-                                    }`} />
-                                )}
-
-                                {/* Sword Symbol Container */}
-                                <div
-                                  className={`relative w-12 h-12 transition-all duration-300 flex items-center justify-center overflow-hidden ${i <= dualityMeter
-                                    ? dualityMeter === 4
-                                      ? 'drop-shadow-[0_0_24px_rgba(59,130,246,1)] drop-shadow-[0_0_40px_rgba(96,165,250,0.8)] scale-125'
-                                      : 'drop-shadow-[0_0_12px_rgba(59,130,246,0.7)] scale-110'
-                                    : 'opacity-30'
-                                    }`}
-                                >
-                                  {/* Sword blade symbol with blue glow */}
-                                  <div className="relative w-8 h-8 flex items-center justify-center">
-                                    {i <= dualityMeter ? (
-                                      <>
-                                        {/* Blue sword glyph */}
-                                        <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                                          {/* Blade */}
-                                          <path d="M12 2 L11 10 L10 17 L12 19 L14 17 L13 10 Z" fill="#60a5fa" opacity="0.6" />
-                                          {/* Crossguard */}
-                                          <line x1="8" y1="10" x2="16" y2="10" stroke="#60a5fa" strokeWidth="1.8" />
-                                          {/* Handle */}
-                                          <rect x="11" y="11" width="2" height="6" fill="#3b82f6" rx="1" />
-                                          {/* Pommel */}
-                                          <circle cx="12" cy="19" r="1.2" fill="#60a5fa" />
-                                        </svg>
-                                        <div className="absolute inset-0 bg-gradient-to-t from-blue-500/20 to-transparent rounded-lg animate-pulse" />
-                                      </>
-                                    ) : (
-                                      <svg className="w-full h-full" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.4">
-                                        {/* Blade */}
-                                        <path d="M12 2 L11 10 L10 17 L12 19 L14 17 L13 10 Z" fill="#64748b" opacity="0.3" />
-                                        {/* Crossguard */}
-                                        <line x1="8" y1="10" x2="16" y2="10" stroke="#64748b" strokeWidth="1.8" />
-                                        {/* Handle */}
-                                        <rect x="11" y="11" width="2" height="6" fill="#64748b" rx="1" />
-                                        {/* Pommel */}
-                                        <circle cx="12" cy="19" r="1.2" fill="#64748b" />
-                                      </svg>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Status Text */}
-                          <p className="text-slate-400 text-[10px] mt-3 text-center italic">
-                            {dualityMeter === 4
-                              ? '✦ FULLY CHARGED! Ready to transform!'
-                              : dualityForm === 'ghoul'
-                                ? '⚔ GHOUL FORM ACTIVE - Limited Duration'
-                                : `Build charges through attacks (${dualityMeter} of 4)`}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Soul Counter */}
-                      <div className="bg-gradient-to-b from-purple-900/40 to-slate-900/60 p-4 rounded-lg border border-purple-800/50 shadow-lg relative overflow-hidden">
-                        {/* Mystical glow */}
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/15 blur-3xl -mr-16 -mt-16 pointer-events-none" />
-
-                        <div className="relative z-10">
-                          <p className="text-[10px] text-purple-400 uppercase tracking-widest font-bold mb-3 flex items-center gap-2">
-                            <div className="w-3 h-3 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 shadow-[0_0_6px_rgba(168,85,247,0.6)]" />
-                            Soul Reserves
-                          </p>
-
-                          {/* Soul Display */}
-                          <div className="flex gap-4 justify-center items-center">
-                            {[1, 2].map((i) => (
-                              <div key={i} className="relative">
-                                {/* Soul glow when collected */}
-                                {i <= clydeSouls && (
-                                  <div className="absolute inset-0 rounded-full blur-xl bg-purple-400/40 scale-125 animate-pulse" />
-                                )}
-
-                                {/* Soul Crystal */}
-                                <div
-                                  className={`relative w-12 h-12 rounded-full border-2 transition-all duration-300 flex items-center justify-center ${i <= clydeSouls
-                                    ? 'bg-gradient-to-br from-purple-500 to-purple-700 border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.7)]'
-                                    : 'bg-slate-800/40 border-slate-700/50'
-                                    }`}
-                                >
-                                  {/* Inner glow */}
-                                  {i <= clydeSouls && (
-                                    <div className="absolute inset-1 rounded-full bg-gradient-to-t from-purple-500/50 to-purple-300/50 blur-sm" />
-                                  )}
-
-                                  {/* Soul Indicator */}
-                                  <div className={`relative z-10 transition-transform ${i <= clydeSouls
-                                    ? 'w-3 h-3 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse scale-110'
-                                    : 'w-2 h-2 bg-slate-600 rounded-full opacity-40'
-                                    }`} />
-                                </div>
-
-                                {/* Soul Number Label */}
-                                <div className={`absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase tracking-wider ${i <= clydeSouls ? 'text-purple-400' : 'text-slate-600'}`}>
-                                  {i}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Total Count */}
-                          <div className="text-center mt-8">
-                            <span className={`text-sm font-black font-mono transition-colors ${clydeSouls > 0 ? 'text-purple-400 drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]' : 'text-slate-500'}`}>
-                              {clydeSouls} / 2 RESERVES
-                            </span>
-                            <p className="text-[9px] text-slate-400 mt-1">
-                              {clydeSouls === 0 && 'Collect souls to unlock revivals'}
-                              {clydeSouls === 1 && '1 revival active - seek another soul'}
-                              {clydeSouls === 2 && 'Maximum reserves - fully prepared'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Artifacts Display */}
-                  {Object.keys(artifacts).length > 0 && (
-                    <div className="pt-3 border-t border-slate-600/30">
-                      <p className="text-xs text-yellow-400 uppercase mb-2 tracking-wider">✨ Active Artifacts</p>
-                      <div className="space-y-1">
-                        {Object.entries(artifacts).map(([artifactId, count]) => {
-                          const artifactNames: Record<string, string> = {
-                            golden_apple: '🍎 Golden Apple',
-                            golden_crown: '👑 Golden Crown',
-                            finished_rubix_cube: '🎲 Rubix Cube',
-                            disco_ball: '🪩 Disco Ball',
-                            lucky_charm: '🍀 Lucky Charm',
-                            wooden_mask: '🎭 Wooden Mask',
-                            slime_boots: '🟢 Slime Boots',
-                            pirates_chest: '🏴‍☠️ Pirates\' Chest',
-                            turtle_shell: '🐢 Turtle Shell',
-                          };
-                          return (
-                            <Tooltip key={artifactId}>
-                              <TooltipTrigger asChild>
-                                <div className="text-xs text-yellow-300 bg-yellow-900/20 border border-yellow-600/20 px-3 py-1.5 rounded-lg flex justify-between items-center cursor-help">
-                                  <span>{artifactNames[artifactId] || artifactId}</span>
-                                  {count > 1 && <span className="text-yellow-500 font-bold">x{count}</span>}
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent sideOffset={6}>
-                                {ARTIFACT_DESCRIPTIONS[artifactId] || 'No description available.'}
-                              </TooltipContent>
-                            </Tooltip>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-slate-600/30">
-                    <div className="text-center group relative cursor-help">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Sword className="w-4 h-4 text-orange-500" />
-                      </div>
-                      <p className="text-xs text-slate-400 uppercase">Attack</p>
-                      <p className="text-slate-100">{attackToUse} {hero.id !== 'clyde' && artifactBonusStats.attack > 0 && <span className="text-yellow-400 text-[10px]">(+{artifactBonusStats.attack})</span>}</p>
-                      {/* Crit chance tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
-                        <div className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 shadow-xl min-w-[160px]">
-                          <p className="text-[10px] text-orange-400 uppercase font-bold tracking-wider mb-1">Crit Chance</p>
-                          <p className="text-[10px] text-slate-300 whitespace-nowrap">Base: {baseCritChance}%</p>
-                          {itemCritChance > 0 && (
-                            <p className="text-[10px] text-slate-300 whitespace-nowrap">Items: +{itemCritChance}%</p>
-                          )}
-                          {guaranteedCrit && (
-                            <p className="text-[10px] text-purple-300 whitespace-nowrap">Guaranteed crit ready</p>
-                          )}
-                          <div className="border-t border-slate-700 mt-1 pt-1">
-                            <p className="text-[10px] text-orange-300 font-bold whitespace-nowrap">Total: {totalCritChance}%</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Shield className="w-4 h-4 text-blue-500" />
-                      </div>
-                      <p className="text-xs text-slate-400 uppercase">Defense</p>
-                      <p className="text-slate-100">{defenseToUse} {artifactBonusStats.defense > 0 && defenseToUse > 0 && <span className="text-yellow-400 text-[10px]">(+{artifactBonusStats.defense})</span>}</p>
-                    </div>
-                    <div className="text-center group relative cursor-help">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Zap className="w-4 h-4 text-green-400" />
-                      </div>
-                      <p className="text-xs text-slate-400 uppercase">Speed</p>
-                      <p className="text-slate-100">{effectiveSpeed}{(equipSpeedBonus + bonusSpeed) > 0 && <span className="text-green-400 text-xs ml-1">(+{equipSpeedBonus + bonusSpeed})</span>}</p>
-                      {/* Dodge chance tooltip */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
-                        <div className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 shadow-xl min-w-[160px]">
-                          <p className="text-[10px] text-green-400 uppercase font-bold tracking-wider mb-1">Dodge Chance</p>
-                          <p className="text-[10px] text-slate-300 whitespace-nowrap">Base: {(effectiveSpeed * 0.5).toFixed(1)}% <span className="text-slate-500">({effectiveSpeed} SPD × 0.5)</span></p>
-                          {hero.uniqueAbility?.id === 'shadowstep' && (
-                            <p className="text-[10px] text-purple-300 whitespace-nowrap">Shadowstep: +25%</p>
-                          )}
-                          {bonusDodgeChance > 0 && (
-                            <p className="text-[10px] text-purple-300 whitespace-nowrap">Shadow Mastery: +{bonusDodgeChance}%</p>
-                          )}
-                          <p className="text-[10px] text-slate-400 whitespace-nowrap">Cap: {dodgeCap}%</p>
-                          <div className="border-t border-slate-700 mt-1 pt-1">
-                            <p className="text-[10px] text-green-300 font-bold whitespace-nowrap">Total: {totalDodgeChance.toFixed(1)}%</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center justify-center gap-1 mb-1">
-                        <Package className="w-4 h-4 text-purple-500" />
-                      </div>
-                      <p className="text-xs text-slate-400 uppercase">Items</p>
-                      <p className="text-slate-100">{Object.values(inventory).reduce((sum, count) => sum + count, 0)}</p>
-                    </div>
-                  </div>
-                </div>
+                {/* New Hero Status Panel */}
+                <HeroStatusPanel
+                  hero={hero}
+                  playerHealth={playerHealth}
+                  maxPlayerHealth={maxPlayerHealth}
+                  playerShield={playerShield}
+                  playerResource={playerResource}
+                  maxPlayerResource={maxPlayerResource}
+                  resourceType={resourceType}
+                  attack={attackToUse}
+                  defense={defenseToUse}
+                  speed={effectiveSpeed}
+                  statusEffects={{
+                    weakness: playerWeaknessTurns,
+                    speedDebuff: playerSpeedDebuffTurns,
+                    burn: playerBurnTurns,
+                    poison: playerPoisonTurns,
+                    isPoisonLethal: isPlayerPoisonLethal,
+                    vineTrap: vineTrapTurns,
+                    bleed: playerBleedTurns,
+                    pollen: pollenMeter,
+                    devastation: playerDevastationTurns
+                  }}
+                  dualityMeter={dualityMeter}
+                  dualityForm={dualityForm as any}
+                  wolfgangNoteMeter={wolfgangNoteMeter}
+                  lucianSoulMeter={lucianSoulMeter}
+                  clydeSouls={clydeSouls}
+                  eliShieldActive={eliShieldActive}
+                  eliShieldCharge={eliShieldCharge}
+                  maxEliShield={maxEliShield}
+                  onToggleEliShield={toggleEliShield}
+                  permafrostIceActive={permafrostIceActive}
+                  shadowMeter={shadowMeter}
+                  bonusDodgeChance={bonusDodgeChance}
+                  bulletsSpent={bulletsSpent}
+                  guaranteedCrit={guaranteedCrit}
+                  onBurst={handleBurst}
+                  artifacts={artifacts}
+                  inventory={inventory}
+                  artifactBonusStats={artifactBonusStats}
+                  heroId={hero.id}
+                  baseCritChance={baseCritChance}
+                  itemCritChance={itemCritChance}
+                  totalCritChance={totalCritChance}
+                  equipSpeedBonus={equipSpeedBonus}
+                  bonusSpeed={bonusSpeed}
+                  dodgeCap={dodgeCap}
+                  totalDodgeChance={totalDodgeChance}
+                />
               </div>
 
 
@@ -6988,44 +7274,68 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   slashedEnemyIds={slashedEnemyIds}
                   hasRingOfPower={hasEquipment('ring_of_power')}
                   lordInfernoPowerMeter={lordInfernoPowerMeter}
+                  robinHoodRageMeter={robinHoodRageMeter}
                 />
               </div>
             </div>
 
             {/* Combat Log */}
-            <div className="bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-4 min-h-[120px] max-h-[200px] overflow-y-auto shadow-lg shadow-black/10">
-              <h4 className="text-slate-400 text-sm tracking-wider uppercase mb-3">Combat Log</h4>
-              <div className="space-y-2 text-slate-300 text-sm">
-                <AnimatePresence mode="popLayout">
+            {/* Combat Log */}
+            <div className="relative bg-slate-950/80 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl shadow-black/40 flex flex-col h-[200px]">
+              {/* Scanline Overlay */}
+              <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] pointer-events-none z-20 opacity-50" />
+
+              {/* Header */}
+              <div className="bg-slate-900/90 border-b border-slate-700/50 px-4 py-2 flex items-center justify-between z-30">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50" />
+                  </div>
+                  <span className="text-xs text-slate-400 font-mono uppercase tracking-widest ml-2">Battlelog.exe</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                  <span className="text-[10px] text-green-400 font-mono">LIVE</span>
+                </div>
+              </div>
+
+              {/* Log Content */}
+              <div className="p-4 overflow-y-auto flex-1 font-mono text-xs sm:text-sm space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent z-10">
+                <AnimatePresence mode="popLayout" initial={false}>
                   {[...combatLog].reverse().map((log, index) => (
-                    <motion.p
+                    <motion.div
                       key={`${log}-${combatLog.length - 1 - index}`}
-                      initial={{ opacity: 0, x: -20 }}
+                      initial={{ opacity: 0, x: -10 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className={index === 0 ? 'text-yellow-400' : ''}
+                      transition={{ duration: 0.2 }}
+                      className={`flex items-start gap-2 ${index === 0 ? 'text-white font-bold' : 'text-slate-400'}`}
                     >
-                      {log}
-                    </motion.p>
+                      <span className="text-slate-600 select-none shrink-0">{'>'}</span>
+                      <span>{log}</span>
+                    </motion.div>
                   ))}
                 </AnimatePresence>
+
+                {/* Turn Indicators */}
                 {isPlayerTurn && (
-                  <motion.p
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-green-400"
+                  <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="flex items-center gap-2 text-green-400/80 pt-2 border-t border-slate-800/50 mt-2"
                   >
-                    › Your turn...
-                  </motion.p>
+                    <span className="animate-pulse">_</span>
+                    <span>Awaiting command...</span>
+                  </motion.div>
                 )}
                 {!isPlayerTurn && (
-                  <motion.p
-                    animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-red-400"
+                  <motion.div
+                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                    className="flex items-center gap-2 text-red-400/80 pt-2 border-t border-slate-800/50 mt-2"
                   >
-                    › Enemy's turn...
-                  </motion.p>
+                    <span className="animate-spin duration-[3000ms]">⟳</span>
+                    <span>Enemy acting...</span>
+                  </motion.div>
                 )}
               </div>
             </div>
@@ -7039,82 +7349,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           !showMoveSelection && !showItemSelection ? (
             <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6">
 
-              <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-
-                <motion.button
-                  whileHover={isPlayerTurn ? { scale: 1.05, y: -5 } : {}}
-                  whileTap={isPlayerTurn ? { scale: 0.95 } : {}}
-                  onClick={handleFight}
-                  disabled={!isPlayerTurn}
-                  className={`group relative px-4 sm:px-8 py-4 sm:py-6 border rounded-xl transition-all duration-300 overflow-hidden ${isPlayerTurn
-                    ? 'bg-gradient-to-br from-red-900/40 to-red-950/30 hover:from-red-900/60 hover:to-red-900/40 text-slate-100 border-red-600/60 hover:border-red-500 shadow-lg shadow-red-900/20'
-                    : 'bg-slate-800/30 text-slate-600 border-slate-700/50 cursor-not-allowed rounded-xl'
-                    }`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-600/20 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                  <div className="relative flex flex-col items-center gap-2">
-                    <Sword className="w-6 h-6 sm:w-8 sm:h-8" />
-                    <span className="tracking-wider uppercase text-sm sm:text-base">Fight</span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">Attack the enemy</span>
-                  </div>
-                </motion.button>
-
-                <motion.button
-                  whileHover={isPlayerTurn ? { scale: 1.05, y: -5 } : {}}
-                  whileTap={isPlayerTurn ? { scale: 0.95 } : {}}
-                  onClick={handleUseItem}
-                  disabled={!isPlayerTurn}
-                  className={`group px-4 sm:px-8 py-4 sm:py-6 border rounded-xl transition-all duration-300 overflow-hidden ${isPlayerTurn
-                    ? 'bg-gradient-to-br from-purple-900/40 to-purple-950/30 hover:from-purple-900/60 hover:to-purple-900/40 text-slate-100 border-purple-600/60 hover:border-purple-500 shadow-lg shadow-purple-900/20'
-                    : 'bg-slate-800/30 text-slate-600 border-slate-700/50 cursor-not-allowed'
-                    }`}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <Package className="w-6 h-6 sm:w-8 sm:h-8" />
-                    <span className="tracking-wider uppercase text-sm sm:text-base">Use Item</span>
-                    <span className="text-[10px] sm:text-xs text-red-400 font-bold uppercase tracking-widest bg-red-900/10 px-2 py-1 rounded">
-                      Ends Turn
-                    </span>
-                  </div>
-                </motion.button>
-
-                <motion.button
-                  whileHover={isPlayerTurn ? { scale: 1.05, y: -5 } : {}}
-                  whileTap={isPlayerTurn ? { scale: 0.95 } : {}}
-                  onClick={handleTrain}
-                  disabled={!isPlayerTurn}
-                  className={`group px-4 sm:px-8 py-4 sm:py-6 border rounded-xl transition-all duration-300 overflow-hidden ${isPlayerTurn
-                    ? 'bg-gradient-to-br from-yellow-900/40 to-yellow-950/30 hover:from-yellow-900/60 hover:to-yellow-900/40 text-slate-100 border-yellow-600/60 hover:border-yellow-500 shadow-lg shadow-yellow-900/20'
-                    : 'bg-slate-800/30 text-slate-600 border-slate-700/50 cursor-not-allowed'
-                    }`}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <Zap className="w-6 h-6 sm:w-8 sm:h-8" />
-                    <span className="tracking-wider uppercase text-sm sm:text-base">Train</span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">+{5 + Math.floor(playerAttack * 0.05)} ATK, take 60% more DMG</span>
-                  </div>
-                </motion.button>
-
-                <motion.button
-                  whileHover={isPlayerTurn ? { scale: 1.05, y: -5 } : {}}
-                  whileTap={isPlayerTurn ? { scale: 0.95 } : {}}
-                  onClick={handleBlock}
-                  disabled={!isPlayerTurn || blockCooldownTurns > 0}
-                  className={`group px-4 sm:px-8 py-4 sm:py-6 border rounded-xl transition-all duration-300 overflow-hidden ${isPlayerTurn && blockCooldownTurns <= 0
-                    ? 'bg-gradient-to-br from-blue-900/40 to-blue-950/30 hover:from-blue-900/60 hover:to-blue-900/40 text-slate-100 border-blue-600/60 hover:border-blue-500 shadow-lg shadow-blue-900/20'
-                    : 'bg-slate-800/30 text-slate-600 border-slate-700/50 cursor-not-allowed'
-                    }`}
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
-                    <span className="tracking-wider uppercase text-sm sm:text-base">Block</span>
-                    <span className="text-[10px] sm:text-xs text-slate-400">
-                      {blockCooldownTurns > 0 ? `On cooldown (${blockCooldownTurns})` : 'Reduce damage by 70%'}
-                    </span>
-                  </div>
-                </motion.button>
-
-              </div>
+              <HeroActionPanel
+                isPlayerTurn={isPlayerTurn}
+                onFight={handleFight}
+                onUseItem={handleUseItem}
+                onTrain={handleTrain}
+                onBlock={handleBlock}
+                blockCooldownTurns={blockCooldownTurns}
+                playerAttack={playerAttack}
+              />
             </div>
           ) : showMoveSelection ? (
             <MoveSelection
@@ -7140,8 +7383,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             />
           )
         }
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }
 

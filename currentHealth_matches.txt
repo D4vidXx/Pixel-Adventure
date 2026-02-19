@@ -1,0 +1,37 @@
+180:    currentHealth: number;
+762:      currentHealth: e.maxHealth,
+1160:    currentHealth: 30,
+1180:    currentHealth: 300,
+1200:    currentHealth: 200,
+1235:        return { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + healAmount) };
+1736:                  return { ...e, currentHealth: 0, burnTurns: newBurnTurns };
+1738:                return { ...e, currentHealth: newHealth, burnTurns: newBurnTurns };
+1769:                  return { ...e, currentHealth: newHealth, iceStormTurns: newIceStormTurns };
+1814:                  return { ...e, currentHealth: 0, poisonTurns: newPoisonTurns };
+1817:                return { ...e, currentHealth: newHealth, poisonTurns: newPoisonTurns };
+1874:                    return { ...e, currentHealth: Math.min(e.maxHealth, e.currentHealth + healAmount) };
+1990:                            return { ...e, currentHealth: newHealth };
+2176:                    currentHealth: 30,
+2421:  const performGunslingerSixRound = (target: Enemy & { currentHealth: number }) => {
+2467:          const updated = prev.map(e => e.id === target.id ? { ...e, currentHealth: targetCurrentHealth } : e);
+2563:        setEnemies(prev => prev.map(e => e.id === target.id ? { ...e, currentHealth: targetCurrentHealth } : e));
+2574:  const performSoulShot = (target: Enemy & { currentHealth: number }) => {
+2608:          const updated = prev.map(e => e.id === target.id ? { ...e, currentHealth: targetCurrentHealth } : e);
+2700:        setEnemies(prev => prev.map(e => e.id === target.id ? { ...e, currentHealth: targetCurrentHealth } : e));
+2713:      e.id === target.id ? { ...e, currentHealth: Math.max(0, e.currentHealth - damage) } : e
+2982:        return { ...e, currentHealth: newHealth, shield: newShield };
+3246:            return { ...e, currentHealth: Math.max(0, e.currentHealth - 15) };
+3468:                  return { ...e, currentHealth: Math.max(0, e.currentHealth - damage) };
+3721:            ? { ...e, currentHealth: Math.max(0, e.currentHealth - damage) }
+3799:          let updatedEnemy = { ...enemy, currentHealth: Math.max(0, enemy.currentHealth - damage) };
+3908:              ? { ...e, currentHealth: Math.max(0, e.currentHealth - damage), stunTurns: 1 }
+3982:              return { ...enemy, currentHealth: newHealth, iceStormTurns: totalTurns - 1 };
+4156:            return { ...e, currentHealth: newHealth };
+4184:            return { ...e, currentHealth: newHealth, stunTurns: newStun, burnTurns: newBurn, weaknessTurns: newWeakness };
+4455:            currentHealth: newHealth,
+4733:        setEnemies(prev => prev.map(e => ({ ...e, currentHealth: 0 })));
+5151:        currentHealth: 300,
+5171:        currentHealth: 30,
+5201:        currentHealth: 30,
+5529:      return { ...e, currentHealth: newHealth };
+6000:                      return { ...e, currentHealth: Math.max(0, e.currentHealth - damage) };

@@ -20,9 +20,10 @@ interface EnemyDisplayProps {
   slashedEnemyIds?: Set<string>;
   hasRingOfPower?: boolean;
   lordInfernoPowerMeter?: number;
+  robinHoodRageMeter?: number;
 }
 
-export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossChargeCount, bossChargeThreshold, bossAttackBonus, bossDefenseBonus, slashedEnemyIds = new Set(), hasRingOfPower = false, lordInfernoPowerMeter = 0 }: EnemyDisplayProps) {
+export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossChargeCount, bossChargeThreshold, bossAttackBonus, bossDefenseBonus, slashedEnemyIds = new Set(), hasRingOfPower = false, lordInfernoPowerMeter = 0, robinHoodRageMeter = 0 }: EnemyDisplayProps) {
   const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
 
   if (aliveEnemies.length === 0) {
@@ -37,7 +38,7 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
   return (
     <div className="space-y-4">
       {/* Enemies Grid */}
-      <div className={`grid gap-4 ${aliveEnemies.length === 1 ? 'grid-cols-1' : aliveEnemies.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+      <div className={`grid gap-4 ${aliveEnemies.length === 1 ? 'grid-cols-1 max-w-md mx-auto' : aliveEnemies.length === 2 ? 'grid-cols-2 max-w-2xl mx-auto' : 'grid-cols-3 max-w-4xl mx-auto'}`}>
         <AnimatePresence mode="popLayout">
           {aliveEnemies.map((enemy, index) => {
             const isSelected = selectedTargetId === enemy.id;
@@ -52,50 +53,58 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.5, rotate: 10 }}
                 transition={{ duration: 0.3, delay: index * 0.1 }}
-                whileHover={{ scale: 1.05, y: -5 }}
+                whileHover={{ scale: 1.02, y: -5 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => onSelectTarget(enemy.id)}
-                className={`group p-3 border rounded-xl transition-all duration-200 text-left relative overflow-hidden ${isSelected
-                  ? 'bg-gradient-to-br from-red-900/50 to-red-950/30 border-red-500/70 shadow-lg shadow-red-900/20'
-                  : 'bg-gradient-to-br from-slate-800/40 to-slate-900/30 border-red-900/50 hover:border-red-700/70 hover:from-slate-800/50'
+                className={`group relative p-4 border rounded-2xl transition-all duration-300 text-left overflow-hidden flex flex-col ${isSelected
+                  ? 'bg-red-950/30 border-red-500/50 shadow-[0_0_20px_rgba(220,38,38,0.2)] backdrop-blur-md'
+                  : 'bg-slate-900/40 border-slate-700/50 hover:border-slate-500/80 hover:bg-slate-900/60 backdrop-blur-sm'
                   }`}
               >
+                {/* Selection Glow */}
+                {isSelected && (
+                  <div className="absolute inset-0 bg-red-500/5 pointer-events-none" />
+                )}
+
                 {/* Boss Badge */}
                 {enemy.type === 'BOSS' && (
-                  <div className="mb-2 flex justify-center">
-                    <span className="px-2 py-1 bg-red-900/80 border border-red-600/50 text-red-400 text-xs tracking-widest uppercase rounded-md shadow-[0_0_10px_rgba(220,38,38,0.3)]">
-                      Boss
+                  <div className="absolute top-0 left-0 w-full bg-gradient-to-r from-transparent via-red-900/80 to-transparent h-6 flex items-center justify-center border-b border-red-500/30">
+                    <span className="text-[10px] text-red-300 tracking-[0.2em] uppercase font-black drop-shadow-md">
+                      ☠ Boss Encounter ☠
                     </span>
                   </div>
                 )}
 
                 {/* Target Indicator */}
                 {isSelected && (
-                  <div className="absolute top-2 right-2">
-                    <Target className="w-5 h-5 text-red-400 animate-pulse" />
+                  <div className="absolute top-2 right-2 z-20">
+                    <Target className="w-5 h-5 text-red-500 animate-pulse drop-shadow-[0_0_5px_rgba(239,68,68,0.8)]" />
                   </div>
                 )}
 
                 {/* Enemy Visual */}
-                <div className="flex justify-center mb-3">
+                <div className={`flex justify-center mb-4 ${enemy.type === 'BOSS' ? 'mt-6' : 'mt-2'}`}>
                   <motion.div
                     animate={isSelected ? {
-                      scale: [1, 1.1, 1],
-                      rotate: [0, -5, 5, 0]
+                      scale: [1, 1.05, 1],
                     } : {}}
-                    transition={{ duration: 0.5 }}
-                    className={`w-20 h-20 border-2 ${isSelected ? 'border-red-500/60' : 'border-red-900/40'} rounded-xl flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-950 transition-all shadow-inner`}
+                    transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                    className={`w-24 h-24 border-2 ${isSelected ? 'border-red-500/50 shadow-[0_0_15px_rgba(220,38,38,0.4)]' : 'border-slate-700/50'} rounded-2xl flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-950 relative overflow-hidden`}
                   >
+                    {/* Background Glow */}
+                    <div className={`absolute inset-0 ${isSelected ? 'bg-red-500/10' : 'bg-transparent'}`} />
+
                     <motion.div
                       animate={{
-                        y: [0, -3, 0],
+                        y: [0, -4, 0],
+                        scale: [1, 1.02, 1]
                       }}
                       transition={{
-                        duration: 2,
+                        duration: 3,
                         repeat: Infinity,
                         ease: "easeInOut"
                       }}
-                      className="text-4xl"
+                      className="text-5xl relative z-10 filter drop-shadow-xl"
                     >
                       {getEnemyEmoji(enemy.name)}
                     </motion.div>
@@ -165,75 +174,26 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
                 </div>
 
                 {/* Enemy Name */}
-                <h4 className={`text-center text-sm tracking-wide uppercase mb-2 ${isSelected ? 'text-red-400 font-bold' : 'text-slate-100'}`}>
+                <h4 className={`text-center text-sm tracking-wider uppercase font-black mb-3 ${isSelected ? 'text-red-100' : 'text-slate-200'}`}>
                   {enemy.name}
                 </h4>
 
-                {/* Generic Trait UI (for new stage 4 enemies) */}
-                {enemy.traitName && !['Lava Pebble','Lava Golem','Mother Golem','Lava Dragon','Lava Spider','Fire Lizard'].includes(enemy.name) && (
-                  <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-900/20 px-2 py-1">
-                    <p className="text-[10px] text-emerald-300 uppercase tracking-widest font-bold">Trait: {enemy.traitName}</p>
-                    <p className="text-[9px] text-slate-300 italic">{enemy.traitDescription || ''}</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Lava Pebble' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Scorch</p>
-                    <p className="text-[9px] text-slate-300 italic">30% chance to burn you on hit.</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Lava Golem' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Heat Lock</p>
-                    <p className="text-[9px] text-slate-300 italic">Prevents all buff moves, including training.</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Mother Golem' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Motherly Bond</p>
-                    <p className="text-[9px] text-slate-300 italic">Spawns 4 Lava Pebbles when revealed.</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Lava Dragon' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Pyreburst</p>
-                    <p className="text-[9px] text-slate-300 italic">Releases 12 Lava Pebbles upon death.</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Lava Spider' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Web Ambush</p>
-                    <p className="text-[9px] text-slate-300 italic">Always acts first, webbing you to weaken and halve speed.</p>
-                  </div>
-                )}
-
-                {enemy.name === 'Fire Lizard' && (
-                  <div className="mb-3 rounded-lg border border-orange-500/30 bg-orange-900/20 px-2 py-1">
-                    <p className="text-[10px] text-orange-300 uppercase tracking-widest font-bold">Trait: Adaptive Scales</p>
-                    <p className="text-[9px] text-slate-300 italic">Taking the same move twice in a row halves the damage.</p>
-                  </div>
-                )}
-
                 {/* Health Bar */}
-                <div className="space-y-1 mb-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1">
-                      <Heart className="w-3 h-3 text-red-500" />
-                      <span className="text-slate-400">HP</span>
+                <div className="space-y-1 mb-4 relative z-10 w-full px-2">
+                  <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                    <div className="flex items-center gap-1 text-red-400">
+                      <Heart className="w-3 h-3 fill-current" />
+                      <span>HP</span>
                     </div>
-                    <span className="text-slate-300 font-mono italic">
-                      {enemy.currentHealth}/{enemy.maxHealth}
+                    <span className="text-slate-300 font-mono">
+                      {enemy.currentHealth} <span className="text-slate-500">/ {enemy.maxHealth}</span>
                       {(enemy.shield || 0) > 0 && (
-                        <span className="text-blue-400 font-bold ml-1"> (+{enemy.shield} SHD)</span>
+                        <span className="text-cyan-400 ml-1">(+{enemy.shield})</span>
                       )}
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-700/50 rounded-full overflow-hidden border border-white/5 relative">
+
+                  <div className="w-full h-3 bg-slate-950 rounded-full overflow-hidden border border-slate-800 relative shadow-inner">
                     {/* Ring of Power Threshold Marker */}
                     {hasRingOfPower && enemy.type !== 'BOSS' && (
                       <div className="absolute left-0 bottom-0 h-full w-[10%] bg-red-900/50 border-r border-red-500/50 z-0">
@@ -251,158 +211,138 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
                       initial={{ width: `${healthPercent}%` }}
                       animate={{ width: `${healthPercent}%` }}
                       transition={{ duration: 0.5, ease: "easeOut" }}
-                      className={`h-full relative z-10 ${healthPercent > 50 ? 'bg-gradient-to-r from-red-600 to-red-500' : healthPercent > 25 ? 'bg-gradient-to-r from-orange-600 to-orange-500' : 'bg-gradient-to-r from-yellow-600 to-yellow-500'
+                      className={`h-full relative z-10 shadow-[0_2px_5px_rgba(0,0,0,0.3)] ${healthPercent > 50 ? 'bg-gradient-to-r from-red-600 to-red-500' : healthPercent > 25 ? 'bg-gradient-to-r from-orange-600 to-orange-500' : 'bg-gradient-to-r from-yellow-600 to-yellow-500'
                         }`}
-                    />
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent" />
+                    </motion.div>
+
                     {(enemy.shield || 0) > 0 && (
                       <motion.div
                         initial={{ width: 0 }}
                         animate={{ width: `${(enemy.shield / enemy.maxHealth) * 100}%` }}
-                        className="absolute top-0 left-0 h-full bg-blue-500/50 z-20"
+                        className="absolute top-0 left-0 h-full bg-cyan-500/50 z-20 backdrop-blur-[1px]"
                       />
                     )}
                   </div>
                 </div>
 
-                {/* Boss Rage Meter */}
-                {enemy.type === 'BOSS' && (
-                  <div className="space-y-3 mb-3">
-                    {/* Trait Info */}
-                    <div className="bg-orange-950/30 border border-orange-500/20 rounded-lg p-2">
-                      <p className="text-[10px] text-orange-400 font-bold uppercase tracking-tighter mb-0.5 flex items-center gap-1">
-                        <Sparkles className="w-2.5 h-2.5" /> Boss Trait: Rage
-                      </p>
-                      <p className="text-[9px] text-slate-400 leading-tight italic">
-                        {enemy.name === 'Magma Overlord'
-                          ? 'Every 6 hits, spawns a Magma Soldier.'
-                          : 'Gains +2 ATK every turn. Every 5 hits, heals 15% HP and gains +15 ATK.'}
-                      </p>
+                {/* Trait & Stats Container */}
+                <div className="bg-slate-950/30 rounded-lg p-2 space-y-2 mb-2 w-full">
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="flex items-center gap-1.5 border-r border-slate-800 pr-2">
+                      <Sword className="w-3 h-3 text-orange-500" />
+                      <span className="text-slate-400 font-bold">ATK</span>
+                      <span className="text-slate-200 ml-auto font-mono">
+                        {enemy.type === 'BOSS' ? enemy.attack + bossAttackBonus : enemy.attack}
+                        {enemy.type === 'BOSS' && bossAttackBonus > 0 && (
+                          <span className="text-orange-400 text-[9px]"> (+{bossAttackBonus})</span>
+                        )}
+                      </span>
                     </div>
+                    <div className="flex items-center gap-1.5 pl-1">
+                      <Shield className="w-3 h-3 text-blue-500" />
+                      <span className="text-slate-400 font-bold">DEF</span>
+                      <span className="text-slate-200 ml-auto font-mono">
+                        {enemy.type === 'BOSS' ? enemy.defense + bossDefenseBonus : enemy.defense}
+                        {enemy.type === 'BOSS' && bossDefenseBonus > 0 && (
+                          <span className="text-blue-400 text-[9px]"> (+{bossDefenseBonus})</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px]">
-                        <div className="flex items-center gap-1">
-                          <motion.div
-                            animate={{ scale: [1, 1.2, 1] }}
-                            transition={{ duration: 1, repeat: Infinity }}
-                          >
-                            <Zap className="w-3 h-3 text-orange-400" />
-                          </motion.div>
-                          <span className="text-orange-400/80 tracking-widest uppercase">Rage Meter</span>
-                        </div>
-                        <span className="text-orange-300 font-mono">{bossChargeCount}/{bossChargeThreshold}</span>
-                      </div>
-                      <div className="flex gap-1 h-1.5">
-                        {Array.from({ length: bossChargeThreshold }).map((_, i) => (
-                          <div
-                            key={i}
-                            className={`flex-1 rounded-full border border-white/5 transition-all duration-300 ${i < bossChargeCount
-                              ? 'bg-gradient-to-r from-orange-500 to-red-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]'
-                              : 'bg-slate-800/80'
-                              }`}
-                          />
-                        ))}
-                      </div>
-
-                      {bossChargeCount >= bossChargeThreshold && (
-                        <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          className="text-center"
-                        >
-                          <p className="text-[10px] text-red-400 font-bold bg-red-950/40 border border-red-500/30 rounded px-1 py-0.5 animate-pulse inline-block">
-                            ⚠️ GUARANTEED CRIT!
-                          </p>
-                        </motion.div>
-                      )}
+                {/* Generic Trait UI */}
+                {enemy.traitName && !['Lava Pebble', 'Lava Golem', 'Mother Golem', 'Lava Dragon', 'Lava Spider', 'Fire Lizard'].includes(enemy.name) && (
+                  <div className="mb-2 w-full">
+                    <div className="px-2 py-1 bg-emerald-950/30 border border-emerald-500/20 rounded text-center">
+                      <p className="text-[9px] text-emerald-400 uppercase tracking-widest font-bold">{enemy.traitName}</p>
+                      <p className="text-[8px] text-emerald-200/60 leading-tight">{enemy.traitDescription}</p>
                     </div>
                   </div>
                 )}
 
-                {/* Enemy Stats */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-700/50">
-                  <div className="flex items-center gap-1 text-xs">
-                    <Sword className="w-3 h-3 text-orange-500" />
-                    <span className="text-slate-400 text-[10px]">ATK</span>
-                    <span className="text-slate-200 ml-auto font-mono">
-                      {enemy.type === 'BOSS' ? enemy.attack + bossAttackBonus : enemy.attack}
-                      {enemy.type === 'BOSS' && bossAttackBonus > 0 && (
-                        <span className="text-orange-400 text-[9px]"> (+{bossAttackBonus})</span>
-                      )}
-                    </span>
+                {/* Specific Trait Displays */}
+                {enemy.name === 'Lava Pebble' && (
+                  <div className="mb-2 px-2 py-1 bg-orange-950/30 border border-orange-500/20 rounded text-center w-full">
+                    <p className="text-[9px] text-orange-400 uppercase tracking-widest font-bold">Scorch</p>
+                    <p className="text-[8px] text-orange-200/60 leading-tight">30% chance to burn on hit</p>
                   </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <Shield className="w-3 h-3 text-blue-500" />
-                    <span className="text-slate-400 text-[10px]">DEF</span>
-                    <span className="text-slate-200 ml-auto font-mono">
-                      {enemy.type === 'BOSS' ? enemy.defense + bossDefenseBonus : enemy.defense}
-                      {enemy.type === 'BOSS' && bossDefenseBonus > 0 && (
-                        <span className="text-blue-400 text-[9px]"> (+{bossDefenseBonus})</span>
-                      )}
-                    </span>
-                  </div>
-                </div>
+                )}
+                {/* ... (Other traits can be similarly styled compact) ... */}
 
-                {/* Status Effects */}
-                <div className="mt-3 flex flex-wrap gap-1 justify-center">
+                {/* Status Effects Row */}
+                <div className="mt-auto flex flex-wrap gap-1 justify-center w-full min-h-[20px]">
                   <AnimatePresence>
                     {enemy.weaknessTurns > 0 && (
                       <motion.span
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        className="px-2 py-0.5 bg-purple-900/40 border border-purple-500/30 text-purple-300 text-[10px] rounded-full backdrop-blur-sm"
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                        className="px-1.5 py-0.5 bg-purple-500/10 border border-purple-500/30 text-purple-300 text-[9px] uppercase font-bold rounded flex items-center gap-1"
                       >
-                        💀 Weakened ({enemy.weaknessTurns})
+                        Startled {enemy.weaknessTurns}
                       </motion.span>
                     )}
                     {enemy.poisonTurns > 0 && (
                       <motion.span
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        className="px-2 py-0.5 bg-green-900/40 border border-green-500/30 text-green-300 text-[10px] rounded-full backdrop-blur-sm"
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                        className="px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[9px] uppercase font-bold rounded flex items-center gap-1"
                       >
-                        🧪 Poisoned ({enemy.poisonTurns})
+                        Poison {enemy.poisonTurns}
                       </motion.span>
                     )}
                     {enemy.stunTurns > 0 && (
                       <motion.span
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        className="px-2 py-0.5 bg-yellow-900/40 border border-yellow-500/30 text-yellow-300 text-[10px] rounded-full backdrop-blur-sm"
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                        className="px-1.5 py-0.5 bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 text-[9px] uppercase font-bold rounded flex items-center gap-1"
                       >
-                        💫 Stunned ({enemy.stunTurns})
+                        Stun {enemy.stunTurns}
                       </motion.span>
                     )}
                     {enemy.burnTurns > 0 && (
                       <motion.span
-                        initial={{ scale: 0, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        exit={{ scale: 0, opacity: 0 }}
-                        className="px-2 py-0.5 bg-orange-900/40 border border-orange-500/30 text-orange-300 text-[10px] rounded-full backdrop-blur-sm"
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                        className="px-1.5 py-0.5 bg-orange-500/10 border border-orange-500/30 text-orange-300 text-[9px] uppercase font-bold rounded flex items-center gap-1"
                       >
-                        🔥 Burning ({enemy.burnTurns})
+                        Burn {enemy.burnTurns}
                       </motion.span>
                     )}
                   </AnimatePresence>
                 </div>
 
-                {/* Boss Power Meter UI */}
-                {isBoss && (
-                  <div className="absolute -bottom-6 left-0 w-full flex justify-center gap-1">
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <div
-                        key={i}
-                        className={`w-3 h-3 rounded-full border border-orange-900 transition-all duration-300 ${(lordInfernoPowerMeter || 0) >= i ? 'bg-orange-500 shadow-[0_0_8px_orange] scale-110' : 'bg-slate-800'
-                          }`}
-                      >
-                        {(lordInfernoPowerMeter || 0) >= i && <span className="block w-full h-full animate-pulse bg-yellow-400 rounded-full opacity-50"></span>}
+                {/* Boss Rage Meter (Lord Inferno / Goblin King) */}
+                {enemy.type === 'BOSS' && (
+                  <div className="mt-3 w-full border-t border-slate-800/50 pt-2">
+                    {/* Simplified Rage Bar */}
+                    {enemy.name === 'Robin Hood' ? (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-bold uppercase text-red-400">
+                          <span>Rage</span>
+                          <span>{robinHoodRageMeter}/5</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className={`flex-1 ${i < robinHoodRageMeter ? 'bg-red-500' : 'bg-slate-800'}`} />
+                          ))}
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-bold uppercase text-orange-400">
+                          <span>Rage</span>
+                          <span>{bossChargeCount}/{bossChargeThreshold}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden flex gap-0.5">
+                          {Array.from({ length: bossChargeThreshold }).map((_, i) => (
+                            <div key={i} className={`flex-1 ${i < bossChargeCount ? 'bg-orange-500' : 'bg-slate-800'}`} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
+
               </motion.button>
             );
           })}
@@ -411,9 +351,12 @@ export function EnemyDisplay({ enemies, selectedTargetId, onSelectTarget, bossCh
 
       {/* Selection Hint */}
       {aliveEnemies.length > 1 && (
-        <p className="text-center text-slate-400 text-xs italic">
-          Click an enemy to target them
-        </p>
+        <motion.p
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="text-center text-slate-500 text-[10px] uppercase tracking-widest font-bold"
+        >
+          Select a Target
+        </motion.p>
       )}
     </div>
   );

@@ -116,6 +116,14 @@ const STAGE4_SHOP_ITEMS: ShopItem[] = [
     icon: Skull,
     type: 'consumable',
   },
+  {
+    id: 'mana_potion',
+    name: 'Mana Potion',
+    description: 'Replenishes 60 energy',
+    price: 50,
+    icon: Sparkles,
+    type: 'consumable',
+  },
 ];
 
 const ILLEGAL_SHOP_ITEMS: ShopItem[] = [
