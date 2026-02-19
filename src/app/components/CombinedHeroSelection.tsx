@@ -21,6 +21,29 @@ interface CombinedHeroSelectionProps {
 
 type TabType = 'all' | 'warrior' | 'mage' | 'rogue' | 'paladin' | 'gunslinger' | 'duality';
 
+// Helper component for stat bars
+const StatBar = ({ label, value, max = 10, colorClass, icon: Icon }: any) => (
+  <div className="flex items-center gap-2 mb-1.5">
+    <div className={`p-1.5 rounded-lg bg-slate-950/40 border border-white/5 ${colorClass.text}`}>
+      <Icon className="w-3.5 h-3.5" />
+    </div>
+    <div className="flex-grow">
+      <div className="flex justify-between text-[10px] uppercase font-bold tracking-wider mb-0.5">
+        <span className="text-slate-400">{label}</span>
+        <span className="text-slate-200">{value}</span>
+      </div>
+      <div className="h-1.5 bg-slate-900/60 rounded-full overflow-hidden border border-white/5">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${(value / max) * 100}%` }}
+          transition={{ duration: 1, ease: "easeOut" }}
+          className={`h-full ${colorClass.bg} shadow-[0_0_10px_currentColor]`}
+        />
+      </div>
+    </div>
+  </div>
+);
+
 export function CombinedHeroSelection({ onSelectHero, onBack, ownedItems, equippedItems, onToggleEquip, backgroundStyle, activeBackgroundId, activeStyleId }: CombinedHeroSelectionProps) {
   const needsTextBoost = activeBackgroundId === 'anime-skies';
   const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -205,105 +228,123 @@ export function CombinedHeroSelection({ onSelectHero, onBack, ownedItems, equipp
                     transition={{ duration: 0.4 }}
                     className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pb-4"
                   >
-                  {heroes.map((hero, index) => {
-                    const isSelected = selectedHero?.id === hero.id;
-                    const isHovered = hoveredHero === hero.id;
+                    {heroes.map((hero, index) => {
+                      const isSelected = selectedHero?.id === hero.id;
+                      const isHovered = hoveredHero === hero.id;
 
-                    return (
-                      <motion.button
-                        key={hero.id}
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.03, duration: 0.3 }}
-                        whileHover={{ scale: 1.02, y: -5 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => {
-                          setSelectedHero(hero);
-                          // Unequip items that this hero can't use
-                          equippedItems.forEach(itemId => {
-                            const item = getEquipmentItem(itemId);
-                            if (item?.unavailableClasses?.includes(hero.classId)) {
-                              onToggleEquip(itemId);
-                            }
-                          });
-                        }}
-                        onMouseEnter={() => setHoveredHero(hero.id)}
-                        onMouseLeave={() => setHoveredHero(null)}
-                        className={`group relative flex flex-col p-5 rounded-3xl border-2 transition-all duration-400 overflow-hidden text-left bg-slate-900/40 backdrop-blur-md ${isSelected
-                          ? 'border-yellow-500 shadow-[0_0_30px_rgba(234,179,8,0.25)] ring-1 ring-yellow-500/50'
-                          : 'border-white/10 hover:border-white/30'
-                          }`}
-                      >
-                        {/* Background Decoration */}
-                        <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full transition-opacity duration-500 -z-10 ${isSelected ? 'bg-yellow-500/15 opacity-100' : 'bg-indigo-500/5 opacity-0 group-hover:opacity-100'
-                          }`} />
+                      return (
+                        <motion.button
+                          key={hero.id}
+                          initial={{ opacity: 0, y: 50 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.05, duration: 0.4 }}
+                          whileHover={{ scale: 1.02, y: -5 }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => {
+                            setSelectedHero(hero);
+                            // Unequip items that this hero can't use
+                            equippedItems.forEach(itemId => {
+                              const item = getEquipmentItem(itemId);
+                              if (item?.unavailableClasses?.includes(hero.classId)) {
+                                onToggleEquip(itemId);
+                              }
+                            });
+                          }}
+                          onMouseEnter={() => setHoveredHero(hero.id)}
+                          onMouseLeave={() => setHoveredHero(null)}
+                          className={`relative group text-left rounded-3xl transition-all duration-500 overflow-hidden ${isSelected
+                            ? 'ring-2 ring-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]'
+                            : 'hover:shadow-[0_0_30px_rgba(0,0,0,0.5)]'
+                            }`}
+                        >
+                          {/* Card Background */}
+                          <div className={`absolute inset-0 backdrop-blur-xl transition-colors duration-500 ${isSelected ? 'bg-slate-900/80' : 'bg-slate-900/40 group-hover:bg-slate-800/60'
+                            }`} />
 
-                        <div className="mb-4">
-                          <h3 className={`text-xl font-black tracking-tight uppercase mb-1 transition-colors ${isSelected ? 'text-yellow-400' : 'text-slate-100'
-                            }`}>
-                            {hero.name}
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            <div className="h-0.5 w-6 bg-red-500" />
-                            <p className="text-red-400 text-[10px] font-black uppercase tracking-widest italic">
-                              {hero.title}
-                            </p>
-                          </div>
-                        </div>
+                          {/* Border Gradient */}
+                          <div className={`absolute inset-0 rounded-3xl border border-white/10 transition-colors duration-500 ${isSelected ? 'border-yellow-500/50' : 'group-hover:border-white/20'
+                            }`} />
 
-                        <p className="text-slate-400 text-xs mb-5 line-clamp-3 font-medium leading-relaxed italic">
-                          "{hero.description}"
-                        </p>
-
-                        {/* Unique Ability */}
-                        {hero.uniqueAbility && (
-                          <div className="mb-5 p-3 bg-indigo-900/20 border border-indigo-500/20 rounded-2xl relative group-hover:border-indigo-500/40 transition-colors">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                              <span className="text-indigo-300 text-[10px] uppercase font-black tracking-widest">
-                                {hero.uniqueAbility.name}
-                              </span>
-                            </div>
-                            <p className="text-slate-300 text-[10px] font-medium leading-tight">
-                              {hero.uniqueAbility.description}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-2 gap-3 mb-6">
-                          {[
-                            { icon: Heart, color: 'text-red-500', bg: 'bg-red-500/10', label: 'HP', val: hero.stats.health },
-                            { icon: Sword, color: 'text-orange-500', bg: 'bg-orange-500/10', label: 'ATK', val: hero.stats.attack },
-                            { icon: Shield, color: 'text-blue-500', bg: 'bg-blue-500/10', label: 'DEF', val: hero.stats.defense },
-                            { icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'SPD', val: hero.stats.speed },
-                          ].map((stat, i) => (
-                            <div key={i} className={`flex items-center gap-2.5 p-2.5 rounded-xl border border-white/5 group-hover:border-white/10 transition-colors ${stat.bg}`}>
-                              <stat.icon className={`w-3.5 h-3.5 ${stat.color}`} />
-                              <div>
-                                <p className="text-[10px] text-slate-500 font-black uppercase tracking-tighter leading-none mb-0.5">{stat.label}</p>
-                                <p className="text-slate-100 text-sm font-black leading-none">{stat.val}</p>
+                          <div className="relative p-5 sm:p-6 flex flex-col h-full">
+                            {/* Hero Header */}
+                            <div className="mb-4 relative">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <h3 className={`text-xl sm:text-2xl font-black tracking-wider uppercase mb-1 transition-colors duration-300 ${isSelected ? 'text-yellow-400' : 'text-slate-100 group-hover:text-white'
+                                    }`}>
+                                    {hero.name}
+                                  </h3>
+                                  <p className="text-yellow-500/80 font-serif italic tracking-wide text-xs sm:text-sm">
+                                    {hero.title}
+                                  </p>
+                                </div>
+                                {isSelected && <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded uppercase">Selected</motion.div>}
                               </div>
                             </div>
-                          ))}
-                        </div>
 
-                        {/* Selection status */}
-                        <div className="mt-auto pt-4 border-t border-white/5 flex items-center justify-between">
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${isSelected ? 'text-yellow-400' : 'text-slate-500 group-hover:text-slate-300'
-                            }`}>
-                            {isSelected ? 'Ready for Descent' : 'Awaiting Selection'}
-                          </span>
-                          {isSelected && (
-                            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-2 h-2 rounded-full bg-yellow-400 shadow-[0_0_8px_rgba(234,179,8,1)]" />
-                          )}
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </motion.div>
-              </AnimatePresence>
-            </div>
+                            {/* Description */}
+                            <div className="mb-4 min-h-[48px]">
+                              <p className="text-slate-400 text-xs leading-relaxed group-hover:text-slate-300 transition-colors line-clamp-3">
+                                {hero.description}
+                              </p>
+                            </div>
+
+                            {/* Stats Grid */}
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-4 bg-black/20 p-3 rounded-xl border border-white/5">
+                              <StatBar
+                                label="Health"
+                                value={hero.stats.health}
+                                max={150}
+                                icon={Heart}
+                                colorClass={{ text: 'text-red-400', bg: 'bg-red-500' }}
+                              />
+                              <StatBar
+                                label="Attack"
+                                value={hero.stats.attack}
+                                max={20}
+                                icon={Sword}
+                                colorClass={{ text: 'text-orange-400', bg: 'bg-orange-500' }}
+                              />
+                              <StatBar
+                                label="Defense"
+                                value={hero.stats.defense}
+                                max={10}
+                                icon={Shield}
+                                colorClass={{ text: 'text-blue-400', bg: 'bg-blue-500' }}
+                              />
+                              <StatBar
+                                label="Speed"
+                                value={hero.stats.speed}
+                                max={10}
+                                icon={Zap}
+                                colorClass={{ text: 'text-yellow-400', bg: 'bg-yellow-500' }}
+                              />
+                            </div>
+
+                            {/* Unique Ability */}
+                            {hero.uniqueAbility && (
+                              <div className={`mt-auto p-3 rounded-xl border transition-all duration-300 ${isSelected
+                                ? 'bg-purple-900/20 border-purple-500/50'
+                                : 'bg-white/5 border-white/5 group-hover:bg-white/10'
+                                }`}>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Sparkles className={`w-3.5 h-3.5 ${isSelected ? 'text-purple-300' : 'text-purple-400'}`} />
+                                  <span className={`text-[10px] uppercase tracking-wider font-bold ${isSelected ? 'text-purple-200' : 'text-purple-300'}`}>
+                                    {hero.uniqueAbility.name}
+                                  </span>
+                                </div>
+                                <p className="text-slate-400 text-[10px]">
+                                  {hero.uniqueAbility.description}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </motion.button>
+                      );
+                    })}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
 
             {/* Equipment Loadout - Right Side */}

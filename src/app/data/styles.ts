@@ -3,7 +3,7 @@ export interface StyleOption {
   name: string;
   description: string;
   badge: string;
-  source: 'base' | 'gacha';
+  source: 'base' | 'gacha' | 'gift';
 }
 
 export const BASE_STYLE_IDS = ['classic', 'pirate'] as const;
@@ -38,6 +38,13 @@ export const STYLE_OPTIONS: StyleOption[] = [
     description: 'Serene misty mountains with cherry blossoms and ancient temples.',
     badge: 'Gacha Exclusive',
     source: 'gacha',
+  },
+  {
+    id: 'fairy-forest',
+    name: 'Fairy Forest',
+    description: 'A magical woodland with glowing flora and gentle spirits.',
+    badge: 'v1.6.1 Gift',
+    source: 'gift',
   },
 ];
 

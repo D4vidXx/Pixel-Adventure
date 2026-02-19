@@ -10,45 +10,113 @@ export interface PatchNote {
 }
 
 export const PATCH_NOTES: PatchNote[] = [
-        {
-            version: '1.5.4',
-            date: '2026-02-13',
-            title: 'Artifact & Equipment Balance Patch',
-            description: 'Major artifact and equipment nerfs/buffs for better game balance.',
-            sections: [
-                {
-                    title: '🧰 Equipment Changes',
-                    items: [
-                        'All equipment base stats (except dodge chance) now break the stat cap.',
-                        'Waving Cat no longer boosts speed.',
-                        'Beer stats buff: +3 → +2, now also gives +2 to a random stat on crit.',
-                        '4-Leaf Clover heal nerfed: 10 HP → 4 HP.',
-                        'Hardened Chest-Plate shield buff: 10 → 12.',
-                        'Dozens of Eggs cap reduced: 5 → 4.',
-                        'Magma Overlord defense increased: 220 → 320.',
-                    ]
-                },
-                {
-                    title: '🎲 Artifact Changes',
-                    items: [
-                        'Lucky Charm boost nerfed: 8% → 5%.',
-                        'Rubix Cube nerfed: 20% → 15%, max 3.',
-                        'Sharp Razor nerfed: 20% → 18%.',
-                        'Golden Apple heal nerfed: 8% → 6%, max 3.',
-                        'Wooden Mask shield nerfed: 15 → 8.',
-                        'Slime Boots nerfed: 25% → 10%.',
-                        'Cap the amount of Golden Apple and Rubix Cube to 3.',
-                        'Golden Apple and Rubix Cube now convert to another legendary artifact if you already own the maximum.',
-                    ]
-                },
-                {
-                    title: '🩹 Shop & Artifact Flow',
-                    items: [
-                        'Lucky Charm, Golden Apple, Rubix Cube, Wooden Mask, and Slime Boots removed from equipment shop (now artifacts only).',
-                    ]
-                }
-            ]
-        },
+    {
+        version: '1.6.1',
+        date: '2026-02-18',
+        title: 'Battle UI Overhaul & Healing Logic',
+        description: 'A massive visual upgrade for combat, a new Paladin hero, and critical balance changes to healing mechanics. Plus, Stage 4 is here!',
+        sections: [
+            {
+                title: '🌲 Stage 4: Fairy Forest',
+                items: [
+                    'Enter the Fairy Forest! 20 new levels of nature-themed chaos.',
+                    'New Enemies: **Moss Golem**, **Vine Monster**, **Shield Fairy**, **Lost Hunter**, **Mutated Flower**.',
+                    'New Bosses: **The Hare**, **Robin Hood**, and the **Elf King**.',
+                    'New Mechanics: Poison, Bleed, Stat Stealing, and Summoning.',
+                ]
+            },
+            {
+                title: '⚔️ New Buyable Moves (Stage 4)',
+                items: [
+                    '**Warrior - Windswept Fury**: Deal 80 damage to all enemies (45 Energy).',
+                    '**Mage - Mana Surge**: For 3 turns, your moves cost 0 Mana.',
+                    '**Rogue - Speed Blitz**: Deal 50 damage + 20% of your Speed.',
+                    '**Paladin - Hammer Combo**: 30 dmg attack -> transforms into 50 dmg AOE + 40 Heal.',
+                    '**Gunslinger - Spare Bullet**: Load a guaranteed Critical Bullet (0 Ammo).',
+                ]
+            },
+            {
+                title: '🖌️ Battle UI Overhaul',
+                items: [
+                    'Complete visual redesign with a modern "Glassmorphism" aesthetic (blur, gradients, neons).',
+                    '**Main Menu Redesign**: Centralized glass card, bottom dock, and glowing flower visuals.',
+                    '**Hero Selection 2.0**: Premium glass cards, visual stat bars, and dynamic background selection.',
+                    'New **Hero Status Panel**: Dedicated UI for detailed stats, artifacts, and inventory.',
+                    'New **Command Center**: Stylized, animated action buttons (Fight, Items, Train, Block).',
+                    'New **Enemy Cards**: Redesigned enemy display with animated bars, elite badges, and trait tooltips.',
+                    'New **Terminal Log**: Combat events now scroll in a retro-style terminal feed.',
+                    'Refined styling for Move and Item selection screens.',
+                ]
+            },
+            {
+                title: '🛡️ New Hero: Eli Grassylocks',
+                items: [
+                    'Added **Eli** to the Paladin roster.',
+                    'Unique **Shield Mechanic**: Regenerates shield daily; can toggle shield to block damage completely.',
+                    'Shield Upgrades: Shop upgrades now increase Max Shield and Regen rate.',
+                    'Sun-Themed Kit: Radiant attacks that scale with Shield and Defense.',
+                ]
+            },
+            {
+                title: '⚖️ Balance & Mechanics',
+                items: [
+                    '**Difficulty System**: Choose between **Easy**, **Normal**, **Hard**, and **Nightmare** in the Main Menu.',
+                    'Harder difficulties increase enemy HP and Attack but grant significantly more Diamonds!',
+                    '**Gift from the Gods**: Usage limit now resets **per stage** (was per run). Usage cap remains 1/stage.',
+                    '**Healing Reduction**: Added support for healing reduction debuffs (e.g., from Elf King).',
+                    '**Artifact Healing**: Artifacts like Golden Apple now respect healing reduction status.',
+                ]
+            },
+            {
+                title: '🐛 Bug Fixes',
+                items: [
+                    'Fixed critical animation crashes caused by `motion/react` dependency issues.',
+                    'Fixed `Thorned Aura` soft-locking the game when killing an enemy via reflection.',
+                    'Fixed `Ancient Rune Stone` dodge effect expiring prematurely.',
+                    'Standardized `handleEnemyDefeated` logic to prevent progression blockers.',
+                ]
+            }
+        ]
+    },
+    {
+        version: '1.5.4',
+        date: '2026-02-13',
+        title: 'Artifact & Equipment Balance Patch',
+        description: 'Major artifact and equipment nerfs/buffs for better game balance.',
+        sections: [
+            {
+                title: '🧰 Equipment Changes',
+                items: [
+                    'All equipment base stats (except dodge chance) now break the stat cap.',
+                    'Waving Cat no longer boosts speed.',
+                    'Beer stats buff: +3 → +2, now also gives +2 to a random stat on crit.',
+                    '4-Leaf Clover heal nerfed: 10 HP → 4 HP.',
+                    'Hardened Chest-Plate shield buff: 10 → 12.',
+                    'Dozens of Eggs cap reduced: 5 → 4.',
+                    'Magma Overlord defense increased: 220 → 320.',
+                ]
+            },
+            {
+                title: '🎲 Artifact Changes',
+                items: [
+                    'Lucky Charm boost nerfed: 8% → 5%.',
+                    'Rubix Cube nerfed: 20% → 15%, max 3.',
+                    'Sharp Razor nerfed: 20% → 18%.',
+                    'Golden Apple heal nerfed: 8% → 6%, max 3.',
+                    'Wooden Mask shield nerfed: 15 → 8.',
+                    'Slime Boots nerfed: 25% → 10%.',
+                    'Cap the amount of Golden Apple and Rubix Cube to 3.',
+                    'Golden Apple and Rubix Cube now convert to another legendary artifact if you already own the maximum.',
+                ]
+            },
+            {
+                title: '🩹 Shop & Artifact Flow',
+                items: [
+                    'Lucky Charm, Golden Apple, Rubix Cube, Wooden Mask, and Slime Boots removed from equipment shop (now artifacts only).',
+                ]
+            }
+        ]
+    },
     {
         version: '1.5.3',
         date: '2026-02-13',

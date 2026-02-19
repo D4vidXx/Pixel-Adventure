@@ -11,6 +11,7 @@ import { Hero } from './data/heroes';
 import { EQUIPMENT_ITEMS } from './data/equipment-items';
 import { BACKGROUND_OPTIONS, DEFAULT_BACKGROUND_ID, getBackgroundById } from './data/backgrounds';
 import { BASE_STYLE_IDS, GACHA_STYLE_ID } from './data/styles';
+import { Difficulty } from './data/difficulty';
 
 export default function App() {
   const defaultStyleId = 'pirate';
@@ -46,6 +47,11 @@ export default function App() {
 
   const [activeStyleId, setActiveStyleId] = useState<string>(() => {
     return localStorage.getItem('pixelAdventure_activeStyle') ?? defaultStyleId;
+  });
+
+  const [difficulty, setDifficulty] = useState<Difficulty>(() => {
+    const saved = localStorage.getItem('pixelAdventure_difficulty');
+    return (saved as Difficulty) || 'normal';
   });
 
   // Save to localStorage whenever diamonds or ownedItems change
@@ -85,6 +91,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('pixelAdventure_activeStyle', activeStyleId);
   }, [activeStyleId]);
+
+  useEffect(() => {
+    localStorage.setItem('pixelAdventure_difficulty', difficulty);
+  }, [difficulty]);
 
   useEffect(() => {
     if (!ownedStyles.includes(activeStyleId)) {
@@ -196,6 +206,16 @@ export default function App() {
   const activeBackground = getBackgroundById(activeBackgroundId) ?? BACKGROUND_OPTIONS[0];
   const showGlobalBackgroundEffects = gameState !== 'playing';
 
+  const handleClaimGift = (styleId: string) => {
+    if (!ownedStyles.includes(styleId)) {
+      const newOwnedStyles = [...ownedStyles, styleId];
+      setOwnedStyles(newOwnedStyles);
+      setActiveStyleId(styleId);
+      localStorage.setItem('pixelAdventure_ownedStyles', JSON.stringify(newOwnedStyles));
+      localStorage.setItem('pixelAdventure_activeStyle', styleId);
+    }
+  };
+
   return (
     <div className="size-full relative" style={{ background: activeBackground.style }}>
       {showGlobalBackgroundEffects && activeBackgroundId === 'aurora-borealis' && <AuroraShootingStar />}
@@ -207,10 +227,14 @@ export default function App() {
           onShop={handleOpenShop}
           onBackgroundShop={handleOpenBackgroundShop}
           onStyleGacha={handleOpenStyleGacha}
+          onClaimGift={handleClaimGift}
           diamonds={diamonds}
           backgroundStyle={activeBackground.style}
           activeStyleId={activeStyleId}
           activeBackgroundId={activeBackgroundId}
+          ownedStyles={ownedStyles}
+          difficulty={difficulty}
+          onDifficultyChange={setDifficulty}
         />
       )}
       {gameState === 'diamondShop' && (
@@ -269,6 +293,8 @@ export default function App() {
           ownedItems={ownedItems}
           onDiamondsEarned={handleDiamondsEarned}
           activeStyleId={activeStyleId}
+          activeBackgroundId={activeBackgroundId}
+          difficulty={difficulty}
         />
       )}
       {gameState === 'settings' && (

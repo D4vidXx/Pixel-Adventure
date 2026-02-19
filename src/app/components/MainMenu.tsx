@@ -1,10 +1,12 @@
-import { Skull, Play, Settings, Sparkles, Diamond, ShoppingBag, ScrollText, Image } from 'lucide-react';
+import { Skull, Play, Settings, Sparkles, Diamond, ShoppingBag, ScrollText, Image, Flower, ChevronLeft, ChevronRight, Swords } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ParticleBackground } from './ParticleBackground';
 import { useState, useEffect } from 'react';
 import { PatchNotesModal } from './PatchNotesModal';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
+import animeForestStyleArt from '../../assets/anime-forest.png';
+import { Difficulty, DIFFICULTY_CONFIG } from '../data/difficulty';
 
 interface MainMenuProps {
   onPlay: () => void;
@@ -12,21 +14,39 @@ interface MainMenuProps {
   onShop: () => void;
   onBackgroundShop: () => void;
   onStyleGacha: (styleId: string) => void;
+  onClaimGift: (styleId: string) => void;
   diamonds: number;
   backgroundStyle?: string;
   activeStyleId?: string;
   activeBackgroundId?: string;
+  ownedStyles: string[];
+  difficulty: Difficulty;
+  onDifficultyChange: (difficulty: Difficulty) => void;
 }
 
-export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyleGacha, diamonds, backgroundStyle, activeStyleId, activeBackgroundId }: MainMenuProps) {
+export function MainMenu({
+  onPlay,
+  onSettings,
+  onShop,
+  onBackgroundShop,
+  onStyleGacha,
+  onClaimGift,
+  diamonds,
+  backgroundStyle,
+  activeStyleId,
+  activeBackgroundId,
+  ownedStyles,
+  difficulty,
+  onDifficultyChange
+}: MainMenuProps) {
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [hasNewPatchNotes, setHasNewPatchNotes] = useState(false);
 
   useEffect(() => {
     // Check if user has seen the latest patch notes
     const lastSeenPatchVersion = localStorage.getItem('lastSeenPatchVersion');
-    const currentVersion = '1.5.3';
-    
+    const currentVersion = '1.6.1';
+
     if (lastSeenPatchVersion !== currentVersion) {
       setHasNewPatchNotes(true);
       setShowPatchNotes(true);
@@ -34,13 +54,33 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
   }, []);
 
   const showDecorations = activeStyleId !== 'classic';
-  const isGachaStyle = activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape';
-  const getStyleImage = () => activeStyleId === 'japanese-mountainscape' ? mountainStyleArt : animeStyleArt;
+  const isGachaStyle = activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape' || activeStyleId === 'fairy-forest';
+  const getStyleImage = () => {
+    if (activeStyleId === 'japanese-mountainscape') return mountainStyleArt;
+    if (activeStyleId === 'fairy-forest') return animeForestStyleArt;
+    return animeStyleArt;
+  };
   const needsTextBoost = activeBackgroundId === 'anime-skies';
 
-  const baseBackgroundStyle = isGachaStyle 
+  const baseBackgroundStyle = isGachaStyle
     ? 'radial-gradient(circle_at_50%_50%, #1a1d2e, #0f1117)'
     : (backgroundStyle ?? 'radial-gradient(circle_at_20%_15%, rgba(255,236,179,0.35), transparent 55%), linear-gradient(180deg, rgba(18,126,150,1) 0%, rgba(10,88,105,1) 48%, rgba(10,74,88,1) 68%, rgba(8,56,68,1) 100%)');
+
+  const handleDifficultyCycle = (direction: 'next' | 'prev') => {
+    const difficulties: Difficulty[] = ['easy', 'normal', 'hard', 'nightmare'];
+    const currentIndex = difficulties.indexOf(difficulty);
+    let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+
+    if (newIndex >= difficulties.length) newIndex = 0;
+    if (newIndex < 0) newIndex = difficulties.length - 1;
+
+    onDifficultyChange(difficulties[newIndex]);
+  };
+
+  const diffConfig = DIFFICULTY_CONFIG[difficulty];
+
+  // Helper to format percentage
+  const fmtMod = (mod: number) => Math.round(mod * 100) + '%';
 
   // Sorry Package claim logic
   const [sorryClaimed, setSorryClaimed] = useState(() => localStorage.getItem('pixelAdventure_sorryPackageClaimed') === 'true');
@@ -58,29 +98,31 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
       }, 2200);
     }
   };
-        {/* Sorry Package Animation */}
-        {showSorryAnim && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.5 }}
-            className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
-          >
-            <div className="relative">
-              {/* Confetti burst */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-6xl animate-bounce">🎉</span>
-                <span className="text-6xl animate-spin">💎</span>
-                <span className="text-6xl animate-bounce">🎉</span>
-              </div>
-              <div className="relative bg-yellow-400/90 border border-yellow-500 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center">
-                <span className="text-3xl font-black text-yellow-900 mb-2">5000 Diamonds Claimed!</span>
-                <span className="text-lg text-yellow-700">Thank you for your patience.</span>
-              </div>
-            </div>
-          </motion.div>
-        )}
+  {/* Sorry Package Animation */ }
+  {
+    showSorryAnim && (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.5 }}
+        className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none"
+      >
+        <div className="relative">
+          {/* Confetti burst */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-6xl animate-bounce">🎉</span>
+            <span className="text-6xl animate-spin">💎</span>
+            <span className="text-6xl animate-bounce">🎉</span>
+          </div>
+          <div className="relative bg-yellow-400/90 border border-yellow-500 rounded-2xl px-8 py-6 shadow-xl flex flex-col items-center">
+            <span className="text-3xl font-black text-yellow-900 mb-2">5000 Diamonds Claimed!</span>
+            <span className="text-lg text-yellow-700">Thank you for your patience.</span>
+          </div>
+        </div>
+      </motion.div>
+    )
+  }
 
   return (
     <div className="size-full flex items-center justify-center overflow-hidden relative px-4 py-8">
@@ -232,208 +274,209 @@ export function MainMenu({ onPlay, onSettings, onShop, onBackgroundShop, onStyle
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1 }}
-        className="text-center relative z-10 -translate-y-4 sm:-translate-y-6"
+        className="relative z-10 flex flex-col items-center max-w-md w-full"
       >
-        {/* Game Title Section */}
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.2, duration: 0.8 }}
-          className="mb-10 sm:mb-16 relative"
-        >
-          {/* Decorative Glow */}
-          <div className="absolute inset-0 bg-red-600/12 blur-[40px] rounded-full scale-125 -z-10" />
+        {/* Main Glass Card */}
+        <div className="w-full backdrop-blur-xl bg-slate-900/40 border border-white/10 rounded-3xl p-8 shadow-2xl relative overflow-hidden group/card">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
 
+          {/* Game Title Section */}
           <motion.div
-            animate={{
-              rotate: [0, 3, -3, 0],
-              y: [0, -10, 0]
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-            className="flex items-center justify-center mb-6"
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+            className="mb-8 text-center relative"
           >
-            <div className="relative">
-              <motion.div
-                animate={{ opacity: [0.45, 0.85, 0.45], scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute inset-0 bg-red-500/45 blur-xl rounded-full"
-              />
-              <Skull className="w-14 h-14 sm:w-20 sm:h-20 text-red-500 relative" strokeWidth={1.5} />
-            </div>
-          </motion.div>
+            {/* Decorative Glow */}
+            <div className="absolute inset-0 bg-rose-500/20 blur-[60px] rounded-full scale-150 -z-10" />
 
-          <div className="relative inline-block">
-            <motion.h1
-              animate={{
-                textShadow: [
-                  "0 0 10px rgba(239,68,68,0.2)",
-                  "0 0 22px rgba(239,68,68,0.35)",
-                  "0 0 10px rgba(239,68,68,0.2)"
-                ],
-                backgroundImage: [
-                  "linear-gradient(to right, #f1f5f9, #ef4444, #f1f5f9)",
-                  "linear-gradient(to right, #ef4444, #f1f5f9, #ef4444)",
-                  "linear-gradient(to right, #f1f5f9, #ef4444, #f1f5f9)"
-                ]
-              }}
-              transition={{ duration: 5, repeat: Infinity }}
-              style={{ backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', backgroundSize: '200% auto' }}
-              className="text-4xl sm:text-6xl lg:text-7xl font-black text-slate-100 tracking-tighter uppercase mb-2 italic"
-            >
-              Pixel Adventure
-            </motion.h1>
-
-            <motion.div
-              animate={{ opacity: [0, 1, 0], x: [-20, 20, -20] }}
-              transition={{ duration: 3, repeat: Infinity }}
-              className="absolute -top-4 -right-8"
-            >
-              <Sparkles className="w-6 h-6 text-yellow-400" />
-            </motion.div>
-          </div>
-
-          <p className="text-red-400/80 tracking-[0.2em] sm:tracking-[0.3em] uppercase text-[10px] sm:text-xs font-bold mt-4">
-            A Legendary Roguelike Journey
-          </p>
-
-          {/* Footer info */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: [0.2, 0.5, 0.2] }}
-            transition={{ delay: 1.5, duration: 3, repeat: Infinity }}
-            className="mt-6 text-cyan-100/80 text-[10px] tracking-[0.3em] sm:tracking-[0.5em] uppercase font-medium"
-          >
-            v1.5.4 // Angry Marshmallow Group
-          </motion.div>
-        </motion.div>
-
-        {/* Menu Buttons Section */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.8 }}
-          className="flex flex-col gap-4 sm:gap-5 min-w-[260px] sm:min-w-[320px]"
-        >
-                    {/* Sorry Package Button */}
-                    {!sorryClaimed && !showSorryAnim && (
-                      <motion.button
-                        whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.08)" }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={handleSorryClaim}
-                        className="group px-8 py-4 bg-yellow-400/10 text-yellow-300 border border-yellow-400/30 rounded-2xl transition-all duration-300 backdrop-blur-md font-bold tracking-widest uppercase"
-                      >
-                        <span className="text-lg">🪙</span> Claim Sorry Package (+5000 Diamonds)
-                      </motion.button>
-                    )}
-          <motion.button
-            whileHover={{ scale: 1.05, boxShadow: "0 0 26px rgba(239, 68, 68, 0.4)" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onPlay}
-            className="group relative px-8 sm:px-10 py-4 sm:py-5 bg-red-600/20 hover:bg-red-600/30 text-white border border-red-500/60 rounded-2xl transition-all duration-300 backdrop-blur-md overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-            <div className="relative flex items-center justify-center gap-3">
-              <Play className="w-6 h-6 text-red-500 group-hover:text-red-400 transition-colors" />
-              <span className="text-lg font-bold tracking-widest uppercase">Enter Dungeon</span>
-            </div>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05, boxShadow: "0 0 26px rgba(6, 182, 212, 0.35)" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onShop}
-            className="group relative px-10 py-5 bg-cyan-600/20 hover:bg-cyan-600/30 text-white border border-cyan-500/60 rounded-2xl transition-all duration-300 backdrop-blur-md overflow-hidden"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-            <div className="relative flex items-center justify-center gap-3">
-              <ShoppingBag className="w-5 h-5 text-cyan-400 group-hover:text-cyan-300 transition-colors" />
-              <span className="text-sm font-bold tracking-widest uppercase">Equipment Shop</span>
-              <div className="flex items-center gap-1 ml-2 bg-cyan-500/20 px-2 py-0.5 rounded-lg">
-                <Diamond className="w-3.5 h-3.5 text-cyan-400" />
-                <span className="text-xs font-bold text-cyan-300">{diamonds}</span>
+            <div className="flex items-center justify-center mb-4">
+              <div className="relative">
+                <motion.div
+                  animate={{ opacity: [0.45, 0.85, 0.45], scale: [1, 1.2, 1] }}
+                  transition={{ duration: 2, repeat: Infinity }}
+                  className="absolute inset-0 bg-rose-500/45 blur-xl rounded-full"
+                />
+                <Flower className="w-16 h-16 text-rose-200 relative drop-shadow-[0_0_15px_rgba(244,63,94,0.6)]" strokeWidth={1.5} />
               </div>
             </div>
-          </motion.button>
 
-          <motion.button
-            whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.05)" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onSettings}
-            className="group px-10 py-5 bg-white/5 text-slate-300 border border-white/10 rounded-2xl transition-all duration-300 backdrop-blur-md"
-          >
-            <div className="flex items-center justify-center gap-3">
-              <Settings className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" />
-              <span className="text-sm font-medium tracking-widest uppercase">Settings & Audio</span>
-            </div>
-          </motion.button>
+            <h1 className="text-4xl sm:text-5xl font-black text-slate-100 tracking-tighter uppercase italic mb-2 drop-shadow-lg">
+              Pixel<span className="text-red-500">Adventure</span>
+            </h1>
 
-          <motion.button
-            whileHover={{ scale: 1.05, backgroundColor: "rgba(168, 85, 247, 0.1)" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              setShowPatchNotes(true);
-              setHasNewPatchNotes(false);
-              localStorage.setItem('lastSeenPatchVersion', '1.5.3');
-            }}
-            className="group relative px-10 py-4 bg-purple-500/5 text-purple-300/80 border border-purple-500/20 rounded-xl transition-all duration-300 backdrop-blur-md hover:border-purple-500/40"
+            <p className="text-red-400/80 tracking-[0.3em] uppercase text-[10px] font-bold">
+              v1.6.1 // Roguelike Journey
+            </p>
+          </motion.div>
+
+          {/* Menu Buttons Section */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.6, duration: 0.8 }}
+            className="flex flex-col gap-3"
           >
-            {hasNewPatchNotes && (
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 rounded-full flex items-center justify-center shadow-lg shadow-red-600/50"
+            {/* Gift Claim Button - Prominent if available */}
+            {!ownedStyles.includes('fairy-forest') && (
+              <motion.button
+                whileHover={{ scale: 1.02, backgroundColor: "rgba(16, 185, 129, 0.15)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onClaimGift('fairy-forest')}
+                className="w-full py-4 bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 rounded-xl transition-all duration-300 font-bold tracking-widest uppercase relative overflow-hidden shadow-[0_0_20px_rgba(16,185,129,0.1)] hover:shadow-[0_0_30px_rgba(16,185,129,0.2)]"
               >
-                <div className="w-2 h-2 bg-red-300 rounded-full" />
-              </motion.div>
+                <div className="absolute inset-0 bg-emerald-500/10 animate-pulse pointer-events-none" />
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xl">🎁</span>
+                  <span>Claim Gift</span>
+                </div>
+              </motion.button>
             )}
-            <div className="flex items-center justify-center gap-3">
-              <ScrollText className="w-4 h-4 group-hover:text-purple-300 transition-colors" />
-              <span className="text-xs font-bold tracking-[0.2em] uppercase">Patch Notes</span>
+
+            {/* Sorry Package Claim */}
+            {!sorryClaimed && !showSorryAnim && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSorryClaim}
+                className="w-full py-3 bg-yellow-500/10 text-yellow-300 border border-yellow-500/30 rounded-xl font-bold uppercase tracking-widest"
+              >
+                Claim Compensation
+              </motion.button>
+            )}
+
+            {/* Difficulty Selector */}
+            <div className="mb-6 bg-slate-950/40 rounded-xl p-3 border border-white/5 relative group/diff">
+              <div className="flex items-center justify-between gap-4">
+                <button
+                  onClick={() => handleDifficultyCycle('prev')}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+
+                <div className="text-center flex-1">
+                  <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-1">Difficulty</div>
+                  <div className={`text-lg font-black uppercase tracking-wider ${diffConfig.color} filter drop-shadow-md`}>
+                    {diffConfig.label}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleDifficultyCycle('next')}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modifiers Tooltip */}
+              <div className="mt-2 pt-2 border-t border-white/5 flex justify-center gap-4 text-[10px] text-slate-400 font-mono">
+                <span className="flex items-center gap-1"><Swords className="w-3 h-3" /> Enemy Stats: {fmtMod(diffConfig.atkMod)}</span>
+                <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-yellow-500" /> Rewards: {fmtMod(diffConfig.goldMod)}</span>
+              </div>
             </div>
-          </motion.button>
-        </motion.div>
+
+            {/* Primary Action: Enter Dungeon */}
+            <motion.button
+              whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(220, 38, 38, 0.4)" }}
+              whileTap={{ scale: 0.98 }}
+              onClick={onPlay}
+              className="w-full py-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white border border-red-400/50 rounded-xl transition-all duration-300 shadow-lg shadow-red-900/50 group relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent,rgba(255,255,255,0.2),transparent)] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              <div className="flex items-center justify-center gap-3">
+                <Play className="w-6 h-6 fill-current" />
+                <span className="text-lg font-black tracking-widest uppercase">Start Run</span>
+              </div>
+            </motion.button>
+
+            {/* Secondary Actions: Grid */}
+            <div className="grid grid-cols-2 gap-3 mt-1">
+              <motion.button
+                whileHover={{ scale: 1.02, backgroundColor: "rgba(6, 182, 212, 0.15)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onShop}
+                className="py-4 bg-cyan-900/30 hover:bg-cyan-900/50 text-cyan-100 border border-cyan-500/30 rounded-xl transition-all backdrop-blur-sm flex flex-col items-center gap-1"
+              >
+                <ShoppingBag className="w-5 h-5 text-cyan-400 mb-1" />
+                <span className="text-xs font-bold uppercase tracking-wider">Shop</span>
+                <div className="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded text-[10px] text-cyan-300 font-mono">
+                  <Diamond className="w-3 h-3" /> {diamonds}
+                </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02, backgroundColor: "rgba(255, 255, 255, 0.1)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onSettings}
+                className="py-4 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 border border-slate-600/30 rounded-xl transition-all backdrop-blur-sm flex flex-col items-center justify-center gap-2"
+              >
+                <Settings className="w-5 h-5" />
+                <span className="text-xs font-bold uppercase tracking-wider">Settings</span>
+              </motion.button>
+            </div>
+
+            {/* Tertiary Action: Patch Notes */}
+            <motion.button
+              whileHover={{ scale: 1.02, color: "rgba(216, 180, 254, 1)" }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                setShowPatchNotes(true);
+                setHasNewPatchNotes(false);
+                localStorage.setItem('lastSeenPatchVersion', '1.5.3');
+              }}
+              className="mt-2 text-xs text-slate-400 hover:text-purple-300 uppercase tracking-widest font-semibold transition-colors flex items-center justify-center gap-2 py-2"
+            >
+              {hasNewPatchNotes && <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+              <ScrollText className="w-3 h-3" />
+              <span>View Patch Notes</span>
+            </motion.button>
+          </motion.div>
+        </div>
       </motion.div>
 
-      <div className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 sm:left-6 sm:translate-x-0 z-20 w-[calc(100%-1rem)] sm:w-auto flex items-center justify-center sm:justify-start flex-wrap gap-2 sm:gap-4">
-        <motion.button
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={onBackgroundShop}
-          className="flex items-center gap-2"
-        >
-          <span className="size-12 rounded-full bg-cyan-500/20 border border-cyan-300/40 backdrop-blur-md flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Image className="w-5 h-5 text-cyan-200" />
-          </span>
-          <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] sm:tracking-[0.3em] text-cyan-100/80 font-semibold">Backgrounds</span>
-        </motion.button>
+      {/* Bottom Dock for Extras */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+        <div className="flex items-center gap-4 px-6 py-3 bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
+          <motion.button
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={onBackgroundShop}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 group-hover:border-cyan-400 flex items-center justify-center transition-colors">
+              <Image className="w-5 h-5 text-slate-400 group-hover:text-cyan-300 transition-colors" />
+            </div>
+            <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-cyan-200">Backdrop</span>
+          </motion.button>
 
-        <motion.button
-          whileHover={{ scale: 1.08, boxShadow: "0 0 20px rgba(244, 114, 182, 0.35)" }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => onStyleGacha('anime-prism')}
-          className="flex items-center gap-2"
-        >
-          <span className="size-12 rounded-full bg-pink-500/20 border border-pink-400/40 backdrop-blur-md flex items-center justify-center shadow-lg shadow-pink-500/20">
-            <Sparkles className="w-5 h-5 text-pink-300" />
-          </span>
-          <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.12em] sm:tracking-[0.3em] text-pink-100/80 font-semibold">Anime Gacha</span>
-        </motion.button>
+          <div className="w-px h-8 bg-white/10" />
 
-        <motion.button
-          whileHover={{ scale: 1.08, boxShadow: "0 0 20px rgba(147, 197, 253, 0.35)" }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => onStyleGacha('japanese-mountainscape')}
-          className="flex items-center gap-2"
-        >
-          <span className="size-12 rounded-full bg-blue-500/20 border border-blue-400/40 backdrop-blur-md flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Sparkles className="w-5 h-5 text-blue-300" />
-          </span>
-          <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.1em] sm:tracking-[0.15em] text-blue-100/80 font-semibold">Mountain Gacha</span>
-        </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onStyleGacha('anime-prism')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 group-hover:border-pink-400 flex items-center justify-center transition-colors">
+              <Sparkles className="w-5 h-5 text-pink-400" />
+            </div>
+            <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-pink-200">Prism</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onStyleGacha('japanese-mountainscape')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 group-hover:border-blue-400 flex items-center justify-center transition-colors">
+              <Sparkles className="w-5 h-5 text-blue-400" />
+            </div>
+            <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-blue-200">Mountain</span>
+          </motion.button>
+        </div>
       </div>
 
       <AnimatePresence>
