@@ -36,6 +36,12 @@ export const PATCH_NOTES: PatchNote[] = [
                 ]
             },
             {
+                title: '🎨 New Style Backgrounds',
+                items: [
+                    'Added **Fairy Meeting** and **Graceful Sleep** gacha style backgrounds! These new styles are now fully visible in the Main Menu, Hero Selection, and during battle.'
+                ]
+            },
+            {
                 title: '🖌️ Battle UI Overhaul',
                 items: [
                     'Complete visual redesign with a modern "Glassmorphism" aesthetic (blur, gradients, neons).',
@@ -60,12 +66,20 @@ export const PATCH_NOTES: PatchNote[] = [
             {
                 title: '⚖️ Balance & Mechanics',
                 items: [
+                    '**Dynamic Stat Caps**: Stage base caps lowered by 20, but now increase based on your **Hero\'s Base Stats**!',
+                    '**Artifact Synchronization**: Descriptions for Golden Apple, Crown, and Rubix Cube now match their actual in-game power.',
                     '**Difficulty System**: Choose between **Easy**, **Normal**, **Hard**, and **Nightmare** in the Main Menu.',
                     'Harder difficulties increase enemy HP and Attack but grant significantly more Diamonds!',
                     '**Gift from the Gods**: Usage limit now resets **per stage** (was per run). Usage cap remains 1/stage.',
                     '**Healing Reduction**: Added support for healing reduction debuffs (e.g., from Elf King).',
                     '**Artifact Healing**: Artifacts like Golden Apple now respect healing reduction status.',
-                ]
+                ],
+            },
+            {
+                title: '🎒 New Equipment',
+                items: [
+                    '**Fairy Bell**: Grants +8% Lifesteal and heals 10 HP on every enemy kill!',
+                ],
             },
             {
                 title: '🐛 Bug Fixes',

@@ -73,6 +73,8 @@ interface HeroStatusPanelProps {
     bonusSpeed?: number;
     dodgeCap?: number;
     totalDodgeChance?: number;
+    attackCap?: number;
+    defenseCap?: number;
 }
 
 export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
@@ -112,7 +114,9 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
     equipSpeedBonus = 0,
     bonusSpeed = 0,
     dodgeCap = 0,
-    totalDodgeChance = 0
+    totalDodgeChance = 0,
+    attackCap = 0,
+    defenseCap = 0
 }) => {
 
     // Helper to calculate percentages
@@ -130,9 +134,6 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                 <div>
                     <h3 className="text-xl font-black text-white tracking-widest uppercase flex items-center gap-2 drop-shadow-md">
                         {hero.name}
-                        <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700 uppercase tracking-tighter">
-                            Lvl {hero.name === 'Eli Grassylocks' ? '∞' : '1'}
-                        </span>
                     </h3>
                     <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{hero.classId}</p>
                 </div>
@@ -159,6 +160,7 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                                 {guaranteedCrit && <p className="text-[10px] text-purple-300">Guaranteed Crit Ready!</p>}
                                 <div className="border-t border-slate-700 pt-1 mt-1">
                                     <p className="text-[10px] font-bold text-orange-300">Total: {totalCritChance}%</p>
+                                    <p className="text-[10px] text-slate-500 mt-1">Stat Cap: {attackCap}</p>
                                 </div>
                             </div>
                         </TooltipContent>
@@ -167,13 +169,24 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                     <div className="w-px bg-slate-700/50" />
 
                     {/* Defense */}
-                    <div className="flex flex-col items-center px-1">
-                        <Shield className="w-3 h-3 text-blue-400 mb-0.5" />
-                        <span className="text-xs font-bold text-slate-200">
-                            {defense}
-                            {artifactBonusStats.defense > 0 && defense > 0 && <span className="text-yellow-400 text-[10px] ml-0.5">(+{artifactBonusStats.defense})</span>}
-                        </span>
-                    </div>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <div className="flex flex-col items-center px-1 cursor-help">
+                                <Shield className="w-3 h-3 text-blue-400 mb-0.5" />
+                                <span className="text-xs font-bold text-slate-200">
+                                    {defense}
+                                    {artifactBonusStats.defense > 0 && defense > 0 && <span className="text-yellow-400 text-[10px] ml-0.5">(+{artifactBonusStats.defense})</span>}
+                                </span>
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={5} className="bg-slate-900 border-slate-700">
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-blue-400 uppercase">Defense Info</p>
+                                <p className="text-[10px] text-slate-300">Base: {defense}</p>
+                                <p className="text-[10px] text-slate-500 mt-1">Stat Cap: {defenseCap}</p>
+                            </div>
+                        </TooltipContent>
+                    </Tooltip>
 
                     <div className="w-px bg-slate-700/50" />
 
@@ -343,6 +356,44 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
 
             {/* Passives & Unique Mechanics */}
             <div className="space-y-3 relative z-10">
+
+                                {/* Shinjiro Shadow Meter */}
+                                {hero.id === 'shinjiro' && (
+                                      <div className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 border border-purple-700/40 rounded-xl p-2 mb-2 w-full">
+                                        <div className="flex justify-between text-[10px] font-bold uppercase text-purple-300 mb-1">
+                                            <span>Shadow Meter</span>
+                                            <span>{shadowMeter}/2</span>
+                                        </div>
+                                        <div className="h-1 bg-slate-900 rounded-full overflow-hidden flex gap-0.5">
+                                            {[0, 1].map(i => (
+                                                <div key={i} className={`flex-1 transition-all duration-200 ${i < shadowMeter ? 'bg-purple-500 shadow-[0_0_6px_purple]' : 'bg-slate-800'}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Wolfgang Instrument Selection & Duality Stacks */}
+                                {hero.id === 'wolfgang' && (
+                                    <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 border border-indigo-700/40 rounded-xl p-2 flex flex-col gap-2 mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Instrument</span>
+                                            <span className="text-[11px] text-white bg-indigo-700/40 px-2 py-0.5 rounded-lg border border-indigo-400/30 uppercase font-bold tracking-wider">
+                                                {dualityForm === 'keyboard' && 'Keyboard'}
+                                                {dualityForm === 'drums' && 'Drums'}
+                                                {dualityForm === 'violin' && 'Violin'}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-purple-300 font-bold uppercase tracking-widest">Rhythm Flow</span>
+                                            <div className="flex gap-1">
+                                                {[1, 2, 3, 4].map(i => (
+                                                    <div key={i} className={`w-4 h-4 rounded-full border-2 ${i <= dualityMeter ? 'bg-purple-500 border-purple-300 shadow-[0_0_8px_purple]' : 'bg-slate-800 border-slate-700'}`} />
+                                                ))}
+                                            </div>
+                                            <span className="text-[10px] text-purple-200 ml-2">{dualityMeter}/4</span>
+                                        </div>
+                                    </div>
+                                )}
                 {/* Passive Header */}
                 <div className="flex items-center gap-2 mb-2">
                     <Sparkles className="w-3.5 h-3.5 text-purple-400" />

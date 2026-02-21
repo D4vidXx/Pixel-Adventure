@@ -53,25 +53,25 @@ export const LOOT_ITEMS = {
   golden_apple: {
     id: 'golden_apple',
     name: 'Golden Apple',
-    description: 'At the end of your turn, heal 6% of your max HP (max 3)',
+    description: 'At the end of your turn, heal 4% of your max HP (max 3)',
     rarity: 'legendary' as const,
   },
   golden_crown: {
     id: 'golden_crown',
     name: 'Golden Crown',
-    description: '1% chance to instantly kill an enemy at the start of your turn',
+    description: '1% chance to be healed to full health at the start of your turn',
     rarity: 'legendary' as const,
   },
   finished_rubix_cube: {
     id: 'finished_rubix_cube',
     name: 'Finished Rubix Cube',
-    description: 'Permanently increases attack and defense by 15% (max 3)',
+    description: 'Permanently increases attack and defense by 8% (max 3)',
     rarity: 'legendary' as const,
   },
   disco_ball: {
     id: 'disco_ball',
     name: 'Disco Ball',
-    description: '15% chance the enemy gets distracted and skips their turn (max 2; extra converts to another legendary)',
+    description: '10% chance the enemy gets distracted and skips their turn (max 2; extra converts to another legendary)',
     rarity: 'legendary' as const,
   },
   lucky_charm: {

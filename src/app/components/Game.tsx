@@ -6,6 +6,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
 import animeForestStyleArt from '../../assets/anime-forest.png';
+import fairyMeetingArt from '../../assets/fairy-meeting.png';
+import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import { Move } from './MoveSelection';
 import { MoveSelection } from './MoveSelection';
 import { RhythmGame } from './RhythmGame';
@@ -51,6 +53,22 @@ interface GameProps {
 }
 
 export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], onDiamondsEarned, activeStyleId, activeBackgroundId, difficulty }: GameProps) {
+  const getStyleImage = () => {
+    switch (activeStyleId) {
+      case 'anime-prism':
+        return animeStyleArt;
+      case 'japanese-mountainscape':
+        return mountainStyleArt;
+      case 'fairy-forest':
+        return animeForestStyleArt;
+      case 'fairy-meeting':
+        return fairyMeetingArt;
+      case 'Graceful-sleep':
+        return gracefulSleepArt;
+      default:
+        return null;
+    }
+  };
   // Equipment helper
   const [runEquippedItems, setRunEquippedItems] = useState(equippedItems);
   useEffect(() => {
@@ -273,6 +291,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [totalDamageDealt, setTotalDamageDealt] = useState(0);
 
   // ... (existing imports)
+  // Style Art Overlay
+  // Place this in your main game background render:
+  // {getStyleImage() && (
+  //   <img src={getStyleImage()} alt="Style Art" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
+  // )}
 
   const [totalDamageTaken, setTotalDamageTaken] = useState(0);
   const [totalGoldEarned, setTotalGoldEarned] = useState(0);
@@ -422,12 +445,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const maxPlayerHealth = hero.stats.health + permanentUpgrades.healthBonus + equipHealthBonus;
   const maxPlayerResource = hero.classId === 'gunslinger' ? 8 : 100;
 
-  const getStatCap = () => (currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150);
+  const getStatCap = () => (currentStage === 4 ? 730 : currentStage === 3 ? 530 : currentStage === 2 ? 280 : 130);
 
   const ignoreCap = hasEquipment('beer') || hasEquipment('chinese_waving_cat');
   const baseCap = getStatCap();
-  const attackCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 1.3) : baseCap;
-  let defenseCap = hasEquipment('gasoline_cane') ? Math.floor(baseCap * 0.7) : baseCap;
+  // Hero-specific caps: Stage base + Hero base
+  const attackCap = Math.floor((baseCap + hero.stats.attack) * (hasEquipment('gasoline_cane') ? 1.3 : 1));
+  let defenseCap = Math.floor((baseCap + hero.stats.defense) * (hasEquipment('gasoline_cane') ? 0.7 : 1));
   if (vineTrapTurns > 0) defenseCap += 50;
   const attackBonusFromUpgrades = hero.id === 'clyde' ? 0 : permanentUpgrades.attackBonus;
   const attackBase = hero.id === 'clyde' ? hero.stats.attack : playerAttack;
@@ -1738,6 +1762,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
   };
 
+  const applyFairyBellLifesteal = (damage: number) => {
+    if (!hasEquipment('fairy_bell') || damage <= 0) return;
+    const lifestealMultiplier = 0.08;
+    let healAmount = Math.floor(damage * lifestealMultiplier);
+
+    // Elf King Passive: Reduce healing by 50%
+    healAmount = calculateHeal(healAmount);
+
+    if (healAmount > 0) {
+      setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
+      addLog(`🔔 Fairy Bell tinkles! Leeched ${healAmount} HP!`);
+    }
+  };
+
   const maybeTriggerSharpRazor = (isCritical: boolean) => {
     if (!isCritical || !hasEquipment('sharp_razor') || guaranteedCritRef.current) return;
     if (Math.random() < 0.08) {
@@ -2310,20 +2348,47 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                       // Calculate total attack (base + bonuses)
                       const totalAttack = playerAttack;
                       const shadowStrikeDmg = Math.floor(totalAttack * 0.25);
+                      let killed = false;
                       for (let i = 0; i < 3; i++) {
-                        setEnemies(prevEnemies => prevEnemies.map(e => {
-                          if (e.currentHealth > 0) {
-                            const newHealth = Math.max(0, e.currentHealth - shadowStrikeDmg);
-                            if (newHealth < e.currentHealth) {
-                              addLog(`🗡️ Shadow Strike hits ${e.name} for ${shadowStrikeDmg} true damage!`);
+                        setEnemies(prevEnemies => {
+                          const updated = prevEnemies.map(e => {
+                            if (e.currentHealth > 0) {
+                              const newHealth = Math.max(0, e.currentHealth - shadowStrikeDmg);
+                              if (newHealth < e.currentHealth) {
+                                addLog(`🗡️ Shadow Strike hits ${e.name} for ${shadowStrikeDmg} true damage!`);
+                              }
+                              if (e.currentHealth > 0 && newHealth === 0) killed = true;
+                              return { ...e, currentHealth: newHealth };
                             }
-                            return { ...e, currentHealth: newHealth };
-                          }
-                          return e;
-                        }));
+                            return e;
+                          });
+                          return updated;
+                        });
                       }
                       setBonusDodgeChance(bonus => bonus + 0.5);
                       setShadowMeter(0);
+                      setTimeout(() => {
+                        // After damage, check for kills and trigger victory/defeat logic
+                        setEnemies(prevEnemies => {
+                          const justKilled = prevEnemies.filter(e => e.currentHealth === 0);
+                          if (justKilled.length > 0) {
+                            justKilled.forEach(e => handleEnemyDefeated(e, prevEnemies));
+                          }
+                          // If all enemies are dead, trigger victory
+                          const allDead = prevEnemies.every(e => e.currentHealth === 0);
+                          if (allDead) {
+                            addLog(`🏆 All enemies defeated! Victory!`);
+                            setTimeout(() => {
+                              if (currentLevel % 3 === 0) {
+                                setShowInterlude(true);
+                              } else {
+                                setShowRewardScreen(true);
+                              }
+                            }, 1000);
+                          }
+                          return prevEnemies;
+                        });
+                      }, 100);
                     }, 500);
                   }
                   return next >= 2 ? 2 : next;
@@ -4917,6 +4982,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       lastMoveIdByEnemyRef.current = { ...lastMoveIdByEnemyRef.current, [target.id]: move.id };
 
       applyBloodVileLifesteal(damage, isCritical);
+      applyFairyBellLifesteal(damage);
       maybeTriggerSharpRazor(isCritical);
 
 
@@ -5208,13 +5274,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       const defenseIncrease = move.defenseBoost;
       setPlayerDefense((prev) => {
         const currentTotal = prev + permanentUpgrades.defenseBonus;
-        const statCap = getStatCap() + (vineTrapTurns > 0 ? 50 : 0);
-        if (currentTotal >= statCap) {
-          addLog(`🛡️ Defense is already at the cap (${statCap})!`);
+        if (currentTotal >= defenseCap) {
+          addLog(`🛡️ Defense is already at the cap (${defenseCap})!`);
           return prev;
         }
 
-        const effectiveIncrease = Math.min(statCap - currentTotal, defenseIncrease);
+        const effectiveIncrease = Math.min(defenseCap - currentTotal, defenseIncrease);
         if (effectiveIncrease < defenseIncrease) {
           addLog(`🛡️ Defense increased by ${effectiveIncrease} (Capped)!`);
         } else {
@@ -5380,18 +5445,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           }
           setPlayerAttack(prev => {
             const totalAtk = prev + permanentUpgrades.attackBonus;
-            const statCap = getStatCap();
-            if (totalAtk >= statCap) return prev;
-            return Math.min(statCap - permanentUpgrades.attackBonus, prev + item.attackBoost!);
+            if (totalAtk >= attackCap) return prev;
+            return Math.min(attackCap - permanentUpgrades.attackBonus, prev + item.attackBoost!);
           });
           addLog(`⚔️ Used ${item.name}! Attack increased!`);
         }
         if (item.defenseBoost !== undefined) {
           setPlayerDefense(prev => {
             const totalDef = prev + permanentUpgrades.defenseBonus;
-            const statCap = getStatCap();
-            if (totalDef >= statCap) return prev;
-            return Math.min(statCap - permanentUpgrades.defenseBonus, prev + item.defenseBoost!);
+            if (totalDef >= defenseCap) return prev;
+            return Math.min(defenseCap - permanentUpgrades.defenseBonus, prev + item.defenseBoost!);
           });
           addLog(`🛡️ Used ${item.name}! Defense increased!`);
         }
@@ -5604,9 +5667,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           return;
         }
         const baseAttack = playerAttack + permanentUpgrades.attackBonus;
-        const statCap = getStatCap();
-        if (baseAttack >= statCap) {
-          addLog(`❌ Your attack is already at the maximum for this stage (${statCap})!`);
+        if (baseAttack >= attackCap) {
+          addLog(`❌ Your attack is already at the maximum for this hero (${attackCap})!`);
           return;
         }
         setGold(prev => prev - price);
@@ -5615,9 +5677,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`⚔️ Attack permanently increased by 8!`);
       } else if (itemId === 'defense_upgrade') {
         const baseDefense = playerDefense + permanentUpgrades.defenseBonus;
-        const statCap = getStatCap();
-        if (baseDefense >= statCap) {
-          addLog(`❌ Your defense is already at the maximum for this stage (${statCap})!`);
+        if (baseDefense >= defenseCap) {
+          addLog(`❌ Your defense is already at the maximum for this hero (${defenseCap})!`);
           return;
         }
         setGold(prev => prev - price);
@@ -5852,6 +5913,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
     }
 
+    // Passive: Fairy Bell - +10 HP heal on kill
+    if (!isMinion && hasEquipment('fairy_bell')) {
+      const healAmount = calculateHeal(10);
+      if (healAmount > 0) {
+        setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
+        addLog(`🔔 Fairy Bell chimes! Healed ${healAmount} HP for the kill!`);
+      }
+    }
+
     // Passive: Blue tinted glasses - +8 resource on kill
     if (!isMinion && hasEquipment('blue_tinted_glasses')) {
       setPlayerResource(prev => {
@@ -5951,18 +6021,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     const baseAtk = playerAttack + permanentUpgrades.attackBonus;
-    const statCap = getStatCap();
     const attackIncrease = 5 + Math.floor(playerAttack * 0.05);
 
-    if (baseAtk >= statCap) {
+    if (baseAtk >= attackCap) {
       addLog('💪 Your physical power is already at the limit for this stage!');
       return;
     }
 
     setPlayerAttack(prev => {
       const totalAtk = prev + permanentUpgrades.attackBonus;
-      if (totalAtk >= statCap) return prev;
-      return Math.min(statCap - permanentUpgrades.attackBonus, prev + attackIncrease);
+      if (totalAtk >= attackCap) return prev;
+      return Math.min(attackCap - permanentUpgrades.attackBonus, prev + attackIncrease);
     });
     setIsTraining(true);
     setTakeExtraDamageNextTurn(true);
@@ -6255,6 +6324,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         ownedSpecialMoves={ownedSpecialMoves}
         playerAttack={playerAttack}
         playerDefense={playerDefense}
+        attackCap={attackCap}
+        defenseCap={defenseCap}
         currentStage={currentStage}
         heroId={hero.id}
         onPurchase={handleShopPurchase}
@@ -6273,13 +6344,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     >
       {/* Gacha Style Background */}
       {/* Gacha Style Background */}
-      {(activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape' || activeStyleId === 'fairy-forest') && (
+      {['anime-prism', 'japanese-mountainscape', 'fairy-forest', 'fairy-meeting', 'Graceful-sleep'].includes(activeStyleId || '') && (
         <>
           <img
             src={
               activeStyleId === 'japanese-mountainscape' ? mountainStyleArt :
-                activeStyleId === 'fairy-forest' ? animeForestStyleArt :
-                  animeStyleArt
+              activeStyleId === 'fairy-forest' ? animeForestStyleArt :
+              activeStyleId === 'fairy-meeting' ? fairyMeetingArt :
+              activeStyleId === 'Graceful-sleep' ? gracefulSleepArt :
+              animeStyleArt
             }
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none"
@@ -7214,9 +7287,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   playerResource={playerResource}
                   maxPlayerResource={maxPlayerResource}
                   resourceType={resourceType}
-                  attack={attackToUse}
-                  defense={defenseToUse}
+                  attack={finalAttack}
+                  defense={finalDefense}
                   speed={effectiveSpeed}
+                  attackCap={attackCap}
+                  defenseCap={defenseCap}
                   statusEffects={{
                     weakness: playerWeaknessTurns,
                     speedDebuff: playerSpeedDebuffTurns,
@@ -7357,6 +7432,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 onBlock={handleBlock}
                 blockCooldownTurns={blockCooldownTurns}
                 playerAttack={playerAttack}
+                attackCap={attackCap}
               />
             </div>
           ) : showMoveSelection ? (

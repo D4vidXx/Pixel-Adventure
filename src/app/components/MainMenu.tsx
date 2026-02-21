@@ -1,11 +1,14 @@
-import { Skull, Play, Settings, Sparkles, Diamond, ShoppingBag, ScrollText, Image, Flower, ChevronLeft, ChevronRight, Swords } from 'lucide-react';
+import { Play, Settings, Sparkles, Diamond, ShoppingBag, ScrollText, Image, Flower, ChevronLeft, ChevronRight, Swords, Leaf, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ParticleBackground } from './ParticleBackground';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PatchNotesModal } from './PatchNotesModal';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
 import animeForestStyleArt from '../../assets/anime-forest.png';
+// import mainMenuSong1 from '../../assets/audio/Main-menu-song1.mp3';
+import fairyMeetingArt from '../../assets/fairy-meeting.png';
+import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import { Difficulty, DIFFICULTY_CONFIG } from '../data/difficulty';
 
 interface MainMenuProps {
@@ -54,11 +57,28 @@ export function MainMenu({
   }, []);
 
   const showDecorations = activeStyleId !== 'classic';
-  const isGachaStyle = activeStyleId === 'anime-prism' || activeStyleId === 'japanese-mountainscape' || activeStyleId === 'fairy-forest';
+  const isGachaStyle = [
+    'anime-prism',
+    'japanese-mountainscape',
+    'fairy-forest',
+    'fairy-meeting',
+    'Graceful-sleep',
+  ].includes(activeStyleId || '');
   const getStyleImage = () => {
-    if (activeStyleId === 'japanese-mountainscape') return mountainStyleArt;
-    if (activeStyleId === 'fairy-forest') return animeForestStyleArt;
-    return animeStyleArt;
+    switch (activeStyleId) {
+      case 'anime-prism':
+        return animeStyleArt;
+      case 'japanese-mountainscape':
+        return mountainStyleArt;
+      case 'fairy-forest':
+        return animeForestStyleArt;
+      case 'fairy-meeting':
+        return fairyMeetingArt;
+      case 'Graceful-sleep':
+        return gracefulSleepArt;
+      default:
+        return animeStyleArt;
+    }
   };
   const needsTextBoost = activeBackgroundId === 'anime-skies';
 
@@ -124,8 +144,10 @@ export function MainMenu({
     )
   }
 
+
   return (
     <div className="size-full flex items-center justify-center overflow-hidden relative px-4 py-8">
+      {/* Main Menu Music handled globally in App.tsx */}
       <div className="absolute inset-0 pointer-events-none z-0">
         {/* Pirate Beach Background */}
         <div className="absolute inset-0" style={{ background: baseBackgroundStyle }} />
@@ -475,6 +497,30 @@ export function MainMenu({
               <Sparkles className="w-5 h-5 text-blue-400" />
             </div>
             <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-blue-200">Mountain</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onStyleGacha('fairy-meeting')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 group-hover:border-green-400 flex items-center justify-center transition-colors">
+              <Leaf className="w-5 h-5 text-green-400" />
+            </div>
+            <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-green-200">Fairy</span>
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => onStyleGacha('Graceful-sleep')}
+            className="flex flex-col items-center gap-1 group"
+          >
+            <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-600 group-hover:border-purple-400 flex items-center justify-center transition-colors">
+              <Moon className="w-5 h-5 text-purple-300" />
+            </div>
+            <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-purple-200">Sleep</span>
           </motion.button>
         </div>
       </div>

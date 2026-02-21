@@ -159,6 +159,14 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         cost: 200,
         icon: '🔥',
     },
+    {
+        id: 'fairy_bell',
+        name: 'Fairy Bell',
+        description: '+8% Lifesteal',
+        passiveDescription: 'Lifesteal 8% of damage dealt. Every enemy kill will heal you 10 HP.',
+        cost: 200,
+        icon: '🔔',
+    },
 ];
 
 export function getEquipmentItem(id: string): EquipmentItem | undefined {

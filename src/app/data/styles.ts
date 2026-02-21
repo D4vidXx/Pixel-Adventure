@@ -7,8 +7,20 @@ export interface StyleOption {
 }
 
 export const BASE_STYLE_IDS = ['classic', 'pirate'] as const;
-export const GACHA_STYLE_IDS = ['anime-prism', 'japanese-mountainscape'] as const;
+
+// Main gacha pool
+export const GACHA_STYLE_IDS = [
+  'anime-prism',
+  'japanese-mountainscape',
+] as const;
 export const GACHA_STYLE_ID = 'anime-prism'; // Primary gacha
+
+// New gacha pool for Fairy-meeting and Graceful-sleep
+export const FAIRY_GACHA_STYLE_IDS = [
+  'fairy-meeting',
+  'Graceful-sleep',
+] as const;
+export const FAIRY_GACHA_STYLE_ID = 'fairy-meeting';
 
 export const STYLE_OPTIONS: StyleOption[] = [
   {
@@ -22,7 +34,7 @@ export const STYLE_OPTIONS: StyleOption[] = [
     id: 'pirate',
     name: 'Pirate Tide',
     description: 'Sun, beach, ships, and warm sea glow.',
-    badge: 'Current Update',
+    badge: 'Update Exclusive',
     source: 'base',
   },
   {
@@ -43,8 +55,22 @@ export const STYLE_OPTIONS: StyleOption[] = [
     id: 'fairy-forest',
     name: 'Fairy Forest',
     description: 'A magical woodland with glowing flora and gentle spirits.',
-    badge: 'v1.6.1 Gift',
+    badge: 'Update v1.6.1 Gift',
     source: 'gift',
+  },
+  {
+    id: 'fairy-meeting',
+    name: 'Fairy Meeting',
+    description: 'A vibrant, stylized world with bold lines and anime-inspired colors.',
+    badge: 'Gacha Exclusive',
+    source: 'gacha',
+  },
+  {
+    id: 'Graceful-sleep',
+    name: 'Graceful Sleep',
+    description: 'A dreamy, tranquil scene evoking peaceful slumber and gentle hues.',
+    badge: 'Gacha Exclusive',
+    source: 'gacha',
   },
 ];
 

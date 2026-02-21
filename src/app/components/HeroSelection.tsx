@@ -1,4 +1,6 @@
 import { ArrowLeft, Heart, Sword, Shield, Zap, Sparkles } from 'lucide-react';
+import fairyMeetingArt from '../../assets/fairy-meeting.png';
+import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Hero, getHeroesByClass } from '../data/heroes';
@@ -40,6 +42,16 @@ const StatBar = ({ label, value, max = 10, colorClass, icon: Icon }: any) => (
 );
 
 export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundStyle, activeStyleId }: HeroSelectionProps) {
+  const getStyleImage = () => {
+    switch (activeStyleId) {
+      case 'fairy-meeting':
+        return fairyMeetingArt;
+      case 'Graceful-sleep':
+        return gracefulSleepArt;
+      default:
+        return null;
+    }
+  };
   const [selectedHero, setSelectedHero] = useState<string | null>(null);
   const [hoveredHero, setHoveredHero] = useState<string | null>(null);
 
@@ -57,6 +69,10 @@ export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundS
         <div className="absolute inset-0 bg-slate-950" />
         {backgroundStyle && (
           <div className="absolute inset-0 opacity-40 blur-sm scale-110" style={{ background: backgroundStyle }} />
+        )}
+        {/* Style Art Overlay */}
+        {getStyleImage() && (
+          <img src={getStyleImage()} alt="Style Art" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
       </div>

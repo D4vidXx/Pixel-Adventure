@@ -10,6 +10,7 @@ interface HeroActionPanelProps {
     onBlock: () => void;
     blockCooldownTurns: number;
     playerAttack: number;
+    attackCap: number;
 }
 
 export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
@@ -19,7 +20,8 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
     onTrain,
     onBlock,
     blockCooldownTurns,
-    playerAttack
+    playerAttack,
+    attackCap
 }) => {
     const container = {
         hidden: { opacity: 0 },
@@ -118,6 +120,8 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
                     <span className="tracking-widest uppercase font-black text-sm sm:text-base">Train</span>
                     <span className="text-[10px] sm:text-xs text-slate-400 leading-tight text-center">
                         <span className="text-amber-300">+{5 + Math.floor(playerAttack * 0.05)} ATK</span>
+                        <br />
+                        <span className="text-slate-500">Limit: {attackCap}</span>
                         <br />
                         <span className="text-red-400">Take 60% More DMG</span>
                     </span>

@@ -1,7 +1,9 @@
 import { ArrowLeft, Diamond, Sparkles, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useState } from 'react';
-import { GACHA_STYLE_ID, getStyleById } from '../data/styles';
+import { useState, useEffect } from 'react';
+import { GACHA_STYLE_ID, getStyleById, FAIRY_GACHA_STYLE_ID } from '../data/styles';
+import fairyMeetingArt from '../../assets/fairy-meeting.png';
+import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
 
@@ -15,6 +17,7 @@ interface StyleGachaProps {
   onBack: () => void;
   backgroundStyle?: string;
   styleId?: string; // Which gacha style to pull for (defaults to anime-prism)
+  gachaType?: 'main' | 'fairy';
 }
 
 const BASE_ROLL_COST = 50;
@@ -28,6 +31,10 @@ const getStyleImage = (styleId: string): string => {
       return animeStyleArt;
     case 'japanese-mountainscape':
       return mountainStyleArt;
+    case 'fairy-meeting':
+      return fairyMeetingArt;
+    case 'Graceful-sleep':
+      return gracefulSleepArt;
     default:
       return animeStyleArt;
   }
@@ -43,8 +50,11 @@ export function StyleGacha({
   onBack,
   backgroundStyle,
   styleId = GACHA_STYLE_ID,
+  gachaType,
 }: StyleGachaProps) {
   const style = getStyleById(styleId);
+  // Determine gacha type for title and background
+  const isFairyGacha = styleId === 'fairy-meeting' || styleId === 'Graceful-sleep' || gachaType === 'fairy';
   const [rollCount, setRollCount] = useState<number>(() => {
     const saved = localStorage.getItem(`pixelAdventure_styleGachaRolls_${styleId}`);
     const parsed = saved ? parseInt(saved, 10) : 0;
@@ -54,29 +64,54 @@ export function StyleGacha({
     localStorage.getItem(`pixelAdventure_styleGachaDiscountDate_${styleId}`)
   );
   const [result, setResult] = useState<'idle' | 'hit' | 'pity' | 'miss'>('idle');
+  const [isRolling, setIsRolling] = useState(false);
+
+  // Reset anti-spam lockout after result is shown
+  useEffect(() => {
+    if (isRolling && result !== 'idle') {
+      setIsRolling(false);
+    }
+  }, [result, isRolling]);
 
   const todayKey = new Date().toISOString().slice(0, 10);
   const hasDiscount = lastDiscountDate !== todayKey;
   const rollCost = Math.ceil(BASE_ROLL_COST * (hasDiscount ? DAILY_DISCOUNT_RATE : 1));
 
-  if (!style) return null;
+  if (!style) {
+    return (
+      <div className="size-full flex flex-col items-center justify-center bg-slate-950 text-white">
+        <div className="text-2xl font-bold mb-4">Style not found</div>
+        <div className="mb-6">The selected style does not exist or could not be loaded.</div>
+        <button
+          className="px-6 py-3 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-lg"
+          onClick={onBack}
+        >
+          Back
+        </button>
+      </div>
+    );
+  }
 
   const isMountainStyle = style.id === 'japanese-mountainscape';
   const owned = ownedStyles.includes(style.id);
   const pityRemaining = owned ? 0 : Math.max(PITY_TARGET - rollCount, 0);
   const pityProgress = owned ? 100 : Math.min((rollCount / PITY_TARGET) * 100, 100);
-  const canRoll = !owned && diamonds >= rollCost;
+  const canRoll = !owned && diamonds >= rollCost && result === 'idle' && !isRolling;
 
   const persistRolls = (count: number) => {
     localStorage.setItem(`pixelAdventure_styleGachaRolls_${styleId}`, count.toString());
   };
 
+  // (removed stray setIsRolling(false);)
   const persistDiscountDate = (value: string) => {
     localStorage.setItem(`pixelAdventure_styleGachaDiscountDate_${styleId}`, value);
   };
 
+
   const handleRoll = () => {
     if (!canRoll) return;
+    if (result !== 'idle') setResult('idle'); // Only reset if not already idle
+    setIsRolling(true);
     onSpendDiamonds(rollCost);
 
     if (hasDiscount) {
@@ -100,6 +135,7 @@ export function StyleGacha({
     }
   };
 
+          // setIsRolling(false); // Removed: this caused infinite re-render
   const handleRollTen = () => {
     if (!canRoll || diamonds < rollCost * 10) return;
     
@@ -135,7 +171,11 @@ export function StyleGacha({
       <div
         className="absolute inset-0"
         style={{
-          background: backgroundStyle ?? 'radial-gradient(circle_at_50%_50%, #111827, #020617)',
+          background: isFairyGacha
+            ? 'radial-gradient(circle at 50% 50%, #18302a 0%, #0e1a16 100%)'
+            : (backgroundStyle && backgroundStyle.trim() !== ''
+                ? backgroundStyle
+                : 'radial-gradient(circle_at_50%_50%, #111827, #020617)'),
         }}
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(244,114,182,0.2),transparent_55%)]" />
@@ -154,7 +194,9 @@ export function StyleGacha({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 sm:px-8 py-4 sm:py-6 border-b border-white/10 bg-gradient-to-b from-slate-950/20 to-transparent">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-white/60">Style Gacha</p>
-            <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight uppercase">Prism Capsule</h2>
+            <h2 className="text-xl sm:text-3xl font-black text-white tracking-tight uppercase">
+              {isFairyGacha ? 'Fairy Capsule' : 'Prism Capsule'}
+            </h2>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2 bg-slate-900/60 border border-pink-400/30 rounded-xl px-3 sm:px-4 py-2">
@@ -277,6 +319,12 @@ export function StyleGacha({
                     )}
                   </div>
                 )}
+                <button
+                  className="mt-6 px-6 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-base"
+                  onClick={() => setResult('idle')}
+                >
+                  Close
+                </button>
               </motion.div>
             )}
           </AnimatePresence>

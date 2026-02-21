@@ -184,6 +184,8 @@ interface ShopProps {
   ownedSpecialMoves: string[];
   playerAttack: number;
   playerDefense: number;
+  attackCap: number;
+  defenseCap: number;
   currentStage: number;
   heroId: string;
   onPurchase: (itemId: string, price: number, isPermanent: boolean) => void;
@@ -191,7 +193,7 @@ interface ShopProps {
   onClose: () => void;
 }
 
-export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, playerAttack, playerDefense, currentStage, heroId, onPurchase, onPurchaseMove, onClose }: ShopProps) {
+export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, playerAttack, playerDefense, attackCap, defenseCap, currentStage, heroId, onPurchase, onPurchaseMove, onClose }: ShopProps) {
   const [hoveredItem, setHoveredItem] = useState<ShopItem | null>(null);
   const isIllegalShop = heroId === 'dearborn';
   let shopItems: ShopItem[];
@@ -223,32 +225,29 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
   const discountedIds = isIllegalShop ? (discountRef.current ?? new Set<string>()) : new Set<string>();
 
   return (
-    <div className="size-full bg-slate-950 flex items-center justify-center p-4 sm:p-6 overflow-hidden relative">
-      {/* Background Layers */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1),rgba(2,6,23,1))]" />
 
-      {/* Nebula Orbs */}
+    <div className="size-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 sm:p-6 overflow-hidden relative">
+      {/* Animated Glow Background */}
       <motion.div
         animate={{
-          scale: [1, 1.2, 1],
-          opacity: [0.05, 0.1, 0.05],
+          scale: [1, 1.1, 1],
+          opacity: [0.08, 0.13, 0.08],
           x: [0, 30, 0],
           y: [0, 20, 0],
         }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute top-0 left-0 w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[100px]"
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-yellow-400/10 rounded-full blur-[120px] z-0"
       />
       <motion.div
         animate={{
-          scale: [1.2, 1, 1.2],
-          opacity: [0.03, 0.08, 0.03],
+          scale: [1.1, 1, 1.1],
+          opacity: [0.06, 0.12, 0.06],
           x: [0, -40, 0],
           y: [0, -20, 0],
         }}
-        transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute bottom-0 right-0 w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[100px]"
+        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-blue-400/10 rounded-full blur-[100px] z-0"
       />
-
       {/* Particles */}
       <ParticleBackground />
 
@@ -326,37 +325,45 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                   const discounted = discountedIds.has(item.id);
                   const finalPrice = discounted ? Math.max(1, Math.floor(item.price * 0.7)) : item.price;
                   const canAfford = gold >= finalPrice;
-                  const statCap = currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
-                  const isCapped = item.id === 'attack_upgrade' ? playerAttack >= statCap : item.id === 'defense_upgrade' ? playerDefense >= statCap : false;
+                  const isCapped = item.id === 'attack_upgrade' ? playerAttack >= attackCap : item.id === 'defense_upgrade' ? playerDefense >= defenseCap : false;
                   const isClydeForbidden = item.id === 'attack_upgrade' && heroId === 'clyde';
                   const canPurchase = canAfford && !isCapped && !isClydeForbidden;
 
                   return (
                     <motion.button
                       key={item.id}
-                      whileHover={canPurchase ? { scale: 1.02, y: -4 } : {}}
-                      whileTap={canPurchase ? { scale: 0.98 } : {}}
+                      whileHover={canPurchase ? { scale: 1.04, y: -6 } : {}}
+                      whileTap={canPurchase ? { scale: 0.97 } : {}}
                       onClick={() => canPurchase && onPurchase(item.id, finalPrice, item.type === 'permanent')}
                       onMouseEnter={() => setHoveredItem(item)}
                       onMouseLeave={() => setHoveredItem(null)}
                       disabled={!canPurchase}
-                      className={`group p-5 border-2 text-left transition-all duration-300 relative min-h-[140px] flex flex-col rounded-2xl overflow-hidden ${canPurchase
-                        ? 'bg-slate-800/50 hover:bg-slate-800/80 border-slate-700/50 hover:border-yellow-500/50 shadow-lg shadow-black/20'
-                        : 'bg-slate-900/50 border-slate-800 opacity-60 cursor-not-allowed'
+                      className={`group p-5 border-2 text-left transition-all duration-300 relative min-h-[140px] flex flex-col rounded-2xl overflow-hidden shadow-xl
+                        ${canPurchase
+                          ? 'bg-slate-800/60 hover:bg-slate-800/90 border-slate-700/50 hover:border-yellow-400/60 shadow-yellow-400/10'
+                          : 'bg-slate-900/60 border-slate-800 opacity-60 cursor-not-allowed'
                         }`}
                     >
+                      {/* Animated border glow for permanent/equipment items */}
+                      {item.type === 'permanent' && canPurchase && (
+                        <motion.div
+                          animate={{ opacity: [0.3, 0.7, 0.3] }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                          className="absolute inset-0 rounded-2xl border-4 border-yellow-400/40 pointer-events-none z-0"
+                          style={{ filter: 'blur(6px)' }}
+                        />
+                      )}
                       {/* Hover Glow */}
                       {canAfford && (
-                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       )}
-
                       <div className="flex-shrink-0 relative z-10">
                         <div className="flex items-center justify-between mb-3">
                           <div className={`p-2 rounded-xl border ${canAfford ? 'bg-slate-900/80 border-slate-700 text-yellow-400' : 'bg-slate-900/40 border-slate-800 text-slate-600'}`}>
                             <Icon className="w-5 h-5" />
                           </div>
                           {item.type === 'permanent' && (
-                            <span className="px-2 py-1 bg-purple-900/30 border border-purple-600/30 text-purple-300 text-[10px] font-bold tracking-wider uppercase rounded-lg backdrop-blur-sm">
+                            <span className="px-2 py-1 bg-yellow-900/30 border border-yellow-400/30 text-yellow-200 text-[10px] font-bold tracking-wider uppercase rounded-lg backdrop-blur-sm shadow-yellow-400/10">
                               Upgrade
                             </span>
                           )}
@@ -448,8 +455,7 @@ export function Shop({ gold, characterClass, currentMoves, ownedSpecialMoves, pl
                             })()}
                           </div>
                           {(() => {
-                            const statCap = currentStage === 4 ? 750 : currentStage === 3 ? 550 : currentStage === 2 ? 300 : 150;
-                            const currentIsCapped = hoveredItem.id === 'attack_upgrade' ? playerAttack >= statCap : hoveredItem.id === 'defense_upgrade' ? playerDefense >= statCap : false;
+                            const currentIsCapped = hoveredItem.id === 'attack_upgrade' ? playerAttack >= attackCap : hoveredItem.id === 'defense_upgrade' ? playerDefense >= defenseCap : false;
                             const discounted = discountedIds.has(hoveredItem.id);
                             const finalPrice = discounted ? Math.max(1, Math.floor(hoveredItem.price * 0.7)) : hoveredItem.price;
                             return currentIsCapped;
