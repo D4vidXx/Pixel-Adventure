@@ -180,6 +180,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [brunoComboMeter, setBrunoComboMeter] = useState(0); // 0-3 hits
   const [moveUsesThisTurn, setMoveUsesThisTurn] = useState<Record<string, number>>({});
   const [playerTemporaryShieldTurns, setPlayerTemporaryShieldTurns] = useState(0);
+  const playerTemporaryShieldAmountRef = useRef(0);
   const [powerPunchTurns, setPowerPunchTurns] = useState<number>(0); // Power Punch queued for next turn
   const powerPunchTurnsRef = useRef<number>(0);
   const [rollAndSlipDodgeActive, setRollAndSlipDodgeActive] = useState(false); // Roll & Slip pending dodge
@@ -891,8 +892,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // --- TICK DOWN PLAYER STATUS EFFECTS ---
     if (playerTemporaryShieldTurns > 0) {
       if (playerTemporaryShieldTurns === 1) {
-        setPlayerShield(0); // Shield expires
+        setPlayerShield(prev => Math.max(0, prev - playerTemporaryShieldAmountRef.current));
         setPlayerTemporaryShieldTurns(0);
+        playerTemporaryShieldAmountRef.current = 0;
         addLog(`🛡️ Your Guard shield expired.`);
       } else {
         setPlayerTemporaryShieldTurns(prev => prev - 1);
@@ -1064,9 +1066,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Reset Guard temporary shield at level boundaries (brawler-specific)
     // Always zero the ref synchronously so downstream code in this function sees 0
     if (hero.classId === 'brawler') {
-      playerShieldRef.current = 0;
-      setPlayerShield(0);
+      playerShieldRef.current = Math.max(0, playerShieldRef.current - playerTemporaryShieldAmountRef.current);
+      setPlayerShield(prev => Math.max(0, prev - playerTemporaryShieldAmountRef.current));
       setPlayerTemporaryShieldTurns(0);
+      playerTemporaryShieldAmountRef.current = 0;
     }
 
     // Reset Feyland-specific flags on level boundaries
@@ -5741,14 +5744,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       addLog(`🌊 Tide Call! Next attack deals +50% damage and you heal ${healAmt} HP! (-${move.cost} ${resourceType})`);
     } else if (move.id === 'guard' && hero.classId === 'brawler') {
       if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      const shieldAmount = Math.floor(maxPlayerHealth * 0.1);
+      const shieldAmount = Math.floor(maxPlayerHealth * 0.15);
       setPlayerShield(prev => prev + shieldAmount);
       setPlayerTemporaryShieldTurns(1);
+      playerTemporaryShieldAmountRef.current = shieldAmount;
       addLog(`🛡️ Guard! Gained ${shieldAmount} Shield for 1 turn. (-${move.cost} ${resourceType})`);
     } else if (move.id === 'quick_guard') {
       const qgShield = Math.floor(maxPlayerHealth * 0.1);
       setPlayerShield(prev => prev + qgShield);
-      addLog(`🛡️ Quick Guard! Gained ${qgShield} Shield. (-${move.cost} ${resourceType})`);
+      setPlayerTemporaryShieldTurns(1);
+      playerTemporaryShieldAmountRef.current = qgShield;
+      addLog(`🛡️ Quick Guard! Gained ${qgShield} Shield for 1 turn. (-${move.cost} ${resourceType})`);
       if (hero.classId === 'brawler') setIsPlayerTurn(true);
       else endPlayerTurn(move);
     } else if (move.id === 'band_aid') {

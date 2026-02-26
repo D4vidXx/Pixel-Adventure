@@ -765,7 +765,7 @@ export const BRUNO_MOVES: Move[] = [
   {
     id: 'guard',
     name: 'Guard',
-    description: 'Brace for impact. Gain a shield worth 10% of your max HP for 1 turn.',
+    description: 'Brace for impact. Gain a shield worth 15% of your max HP for 1 turn.',
     type: 'buff',
     cost: 25,
     cooldown: 0,
