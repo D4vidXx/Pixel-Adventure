@@ -23,6 +23,7 @@ export interface Move {
   randomEffectChance?: number; // Percent chance to apply a random effect
   critDamageMultiplier?: number; // Multiplier for critical damage (e.g., x4)
   damageOverTurns?: number; // Number of turns to spread damage over
+  maxUsesPerTurn?: number; // Maximum number of times this move can be used in a single turn
 }
 
 interface MoveSelectionProps {
@@ -30,10 +31,12 @@ interface MoveSelectionProps {
   onSelectMove: (move: Move) => void;
   onClose: () => void;
   currentResource: number;
-  resourceType: 'Mana' | 'Energy' | 'Bullets';
+  resourceType: 'Mana' | 'Energy' | 'Bullets' | 'Stamina';
   activeCooldowns: Record<string, number>;
   classId: string;
   disabledMoveId?: string | null;
+  moveUsesThisTurn?: Record<string, number>;
+  brunoComboMeter?: number;
 }
 
 const CLASS_SYMBOLS: Record<string, string> = {
@@ -44,7 +47,7 @@ const CLASS_SYMBOLS: Record<string, string> = {
   gunslinger: '🔫',
 };
 
-export function MoveSelection({ moves, onSelectMove, onClose, currentResource, resourceType, activeCooldowns, classId, disabledMoveId }: MoveSelectionProps) {
+export function MoveSelection({ moves, onSelectMove, onClose, currentResource, resourceType, activeCooldowns, classId, disabledMoveId, moveUsesThisTurn, brunoComboMeter }: MoveSelectionProps) {
   const [hoveredMove, setHoveredMove] = useState<Move | null>(null);
   const classSymbol = CLASS_SYMBOLS[classId] || '⚔️';
 
@@ -80,7 +83,7 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
                   }}
                   className="px-4 py-2 bg-red-900/20 hover:bg-red-900/40 text-red-400 border border-red-900/30 font-bold rounded-lg transition-all text-xs tracking-widest uppercase flex items-center gap-2"
                 >
-                  <span>Skip Turn</span>
+                  <span>{classId === 'brawler' ? 'End Turn' : 'Skip Turn'}</span>
                 </button>
               </div>
             </div>
@@ -91,9 +94,14 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
                 const Icon = move.icon;
                 const cooldownRemaining = activeCooldowns[move.id] || 0;
                 const onCooldown = cooldownRemaining > 0;
-                const canAfford = currentResource >= move.cost;
-                const isDisabled = disabledMoveId === move.id;
-                const canUse = canAfford && !onCooldown && !isDisabled;
+
+                const usesThisTurn = moveUsesThisTurn?.[move.id] || 0;
+                const hitMaxUses = move.maxUsesPerTurn !== undefined && usesThisTurn >= move.maxUsesPerTurn;
+                const brawlerFreeMove = classId === 'brawler' && (brunoComboMeter || 0) >= 3;
+
+                const canAfford = currentResource >= move.cost || brawlerFreeMove;
+                const isDisabled = disabledMoveId === move.id || (!brawlerFreeMove && hitMaxUses);
+                const canUse = (canAfford && !onCooldown && !isDisabled);
 
                 let borderColor = 'border-slate-700';
                 let bgColor = 'bg-slate-900/40';
@@ -172,7 +180,17 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
                             CD: {cooldownRemaining}
                           </span>
                         )}
-                        {isDisabled && (
+                        {move.maxUsesPerTurn !== undefined && (
+                          <span className="px-1.5 py-0.5 bg-cyan-900/40 border border-cyan-500/20 rounded text-[10px] uppercase font-bold text-cyan-400">
+                            {usesThisTurn}/{move.maxUsesPerTurn} Uses
+                          </span>
+                        )}
+                        {isDisabled && hitMaxUses && !brawlerFreeMove && (
+                          <span className="px-1.5 py-0.5 bg-red-900/40 border border-red-500/20 rounded text-[10px] uppercase font-bold text-red-400">
+                            Max Uses
+                          </span>
+                        )}
+                        {isDisabled && (!hitMaxUses || brawlerFreeMove) && (
                           <span className="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-[10px] uppercase font-bold text-slate-400">
                             Disabled
                           </span>
@@ -193,10 +211,10 @@ export function MoveSelection({ moves, onSelectMove, onClose, currentResource, r
                         </span>
                       )}
                       <span className={`px-2 py-1 rounded text-xs font-mono font-bold border ${canAfford
-                        ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                        ? (brawlerFreeMove && move.cost > 0) ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' : 'bg-purple-500/10 text-purple-300 border-purple-500/20'
                         : 'bg-red-500/10 text-red-400 border-red-500/20'
                         }`}>
-                        {move.cost} {resourceType === 'Energy' ? 'EN' : resourceType === 'Mana' ? 'MP' : 'AP'}
+                        {brawlerFreeMove ? 0 : move.cost} {resourceType === 'Energy' ? 'EN' : resourceType === 'Stamina' ? 'SP' : resourceType === 'Mana' ? 'MP' : 'AP'}
                       </span>
                     </div>
                   </motion.button>

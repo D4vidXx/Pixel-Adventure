@@ -44,4 +44,10 @@ export const CLASSES: ClassType[] = [
     description: 'Martial artists who can transform into primal beasts when their meter is full.',
     icon: Sparkles,
   },
+  {
+    id: 'brawler',
+    name: 'Brawler',
+    description: 'Relentless fighters who use Stamina to unleash devastating combos in a single turn.',
+    icon: Swords,
+  },
 ];

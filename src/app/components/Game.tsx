@@ -1,4 +1,4 @@
-import { Heart, Shield, Sword, Package, ArrowLeft, Zap, Coins, Target, Sparkles, Moon, Music } from 'lucide-react';
+import { Heart, Shield, Sword, Package, ArrowLeft, Zap, Coins, Target, Sparkles, Moon, Music, Swords } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { ARTIFACT_DESCRIPTIONS, DEBUFF_DESCRIPTIONS } from './data/artifact-descriptions';
 import { useMemo, useState, useEffect, useRef } from 'react';
@@ -29,7 +29,9 @@ import {
   CLYDE_NORMAL_MOVES,
   CLYDE_GHOUL_MOVES,
   DEARBORN_MOVES,
-  DEARBORN_WAVE_CRASH
+  DEARBORN_WAVE_CRASH,
+  JJ_SMITH_MOVES,
+  CECIL_LYSANDER_MOVES
 } from '../data/basic-moves';
 import { LoseScreen } from './LoseScreen';
 import { Hero } from '../data/heroes';
@@ -173,12 +175,43 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const [playerHealth, setPlayerHealth] = useState(hero.stats.health + equipHealthBonus);
   const [playerShield, setPlayerShield] = useState(0);
+
+  // Brawler Class Mechanics
+  const [brunoComboMeter, setBrunoComboMeter] = useState(0); // 0-3 hits
+  const [moveUsesThisTurn, setMoveUsesThisTurn] = useState<Record<string, number>>({});
+  const [playerTemporaryShieldTurns, setPlayerTemporaryShieldTurns] = useState(0);
+  const [powerPunchTurns, setPowerPunchTurns] = useState<number>(0); // Power Punch queued for next turn
+  const powerPunchTurnsRef = useRef<number>(0);
+  const [rollAndSlipDodgeActive, setRollAndSlipDodgeActive] = useState(false); // Roll & Slip pending dodge
+  const rollAndSlipDodgeActiveRef = useRef(false); // Ref mirror for stale-closure safety
+  // JJ Smith (Brawler) specific state
+  const [jjPunches, setJjPunches] = useState(5);
+  const [jjVictoryRushActive, setJjVictoryRushActive] = useState(false);
+  const [jjCritStreak, setJjCritStreak] = useState(0);
+  const [jjVictoryRushStacks, setJjVictoryRushStacks] = useState(0); // 1 stack = +10%
+  const [jjDoubleStaminaNextTurn, setJjDoubleStaminaNextTurn] = useState(false);
+  // Cecil Lysander (Brawler) specific state
+  const [cecilMultiplier, setCecilMultiplier] = useState(2);
+  const [cecilStreak, setCecilStreak] = useState(0);
+  const [showCecilMeter, setShowCecilMeter] = useState(false);
+  const [cecilMeterMoving, setCecilMeterMoving] = useState(false);
+  const [cecilMeterValue, setCecilMeterValue] = useState(0);
+  const [cecilMeterTargetId, setCecilMeterTargetId] = useState<string | null>(null);
+  const cecilMeterDirection = useRef(1); // 1 for right, -1 for left
+  const [showCecilImpactFrame, setShowCecilImpactFrame] = useState(false);
+
   const [playerBurnTurns, setPlayerBurnTurns] = useState(0);
   const [fireTornadoTurns, setFireTornadoTurns] = useState(0);
   const [playerSpeedDebuffTurns, setPlayerSpeedDebuffTurns] = useState(0);
   const [playerAttack, setPlayerAttack] = useState(hero.stats.attack + equipAttackBonus);
   const [playerDefense, setPlayerDefense] = useState(hero.stats.defense + equipDefenseBonus);
-  const [playerResource, setPlayerResource] = useState(hero.classId === 'gunslinger' ? 8 : 100); // Mana, Energy, or Bullets
+  const maxBrawlerStamina = hero.id === 'jj_smith' ? 50 : 60; // JJ has 50, Bruno & Feyland share 60
+  const maxPlayerResource = hero.classId === 'gunslinger' ? 8 : (hero.classId === 'brawler' ? maxBrawlerStamina : 100);
+  const [playerResource, setPlayerResource] = useState(() => {
+    if (hero.classId === 'gunslinger') return 8; // Max bullets
+    if (hero.classId === 'brawler') return maxBrawlerStamina; // Max Stamina
+    return 100; // Mana, Energy, or Bullets
+  });
   const [lucianSoulMeter, setLucianSoulMeter] = useState(0); // Lucian's Soul Meter (0-5000)
   const [permafrostIceActive, setPermafrostIceActive] = useState(hero.id === 'meryn'); // Meryn's passive - ice shield
   const permafrostIceActiveRef = useRef(hero.id === 'meryn');
@@ -190,6 +223,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const lordInfernoAuraCooldownRef = useRef(0);
   const guaranteedCritRef = useRef(false);
   const guaranteedDodgeRef = useRef(false);
+  const combatLockedRef = useRef(true); // true during level transitions — blocks move input
   const lavaHutSpawnTurnRef = useRef(0);
   const lavaHutSpawnIdRef = useRef(0);
   const magmaSoldierSpawnIdRef = useRef(0);
@@ -365,7 +399,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
 
       lastMaxShieldRef.current = maxEliShield;
-      addLog(`🛡️ Shield Capacity Upgraded! (+${diff})`);
+      addLog(`🛡️ Shield Capacity Upgraded! (+${diff} Max Shield)`);
     } else if (hero.id === 'eli' && maxEliShield < lastMaxShieldRef.current) {
       // Handle case where maxShield decreases (e.g. new run started?)
       lastMaxShieldRef.current = maxEliShield;
@@ -408,6 +442,31 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const isSleepingRef = useRef(false);
   useEffect(() => { isSleepingRef.current = isSleeping; }, [isSleeping]);
 
+  // Cecil Meter Animation logic
+  useEffect(() => {
+    if (!showCecilMeter || !cecilMeterMoving) return;
+
+    const baseSpeed = 5;
+    // Logarithmic scaling: at 2x -> 5, 4x -> 7.5, 8x -> 10, 16x -> 12.5...
+    const speed = baseSpeed + (Math.max(0, Math.log2(cecilMultiplier) - 1) * 2.5);
+
+    const interval = setInterval(() => {
+      setCecilMeterValue(prev => {
+        let next = prev + (speed * cecilMeterDirection.current);
+        if (next >= 100) {
+          next = 100;
+          cecilMeterDirection.current = -1;
+        } else if (next <= 0) {
+          next = 0;
+          cecilMeterDirection.current = 1;
+        }
+        return next;
+      });
+    }, 16); // ~60fps
+
+    return () => clearInterval(interval);
+  }, [showCecilMeter, cecilMeterMoving, cecilMultiplier]);
+
   useEffect(() => {
     setBulletsSpent(0);
     setGuaranteedCrit(false);
@@ -443,8 +502,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const attackToUseRef = useRef(0);
 
   const maxPlayerHealth = hero.stats.health + permanentUpgrades.healthBonus + equipHealthBonus;
-  const maxPlayerResource = hero.classId === 'gunslinger' ? 8 : 100;
-
   const getStatCap = () => (currentStage === 4 ? 730 : currentStage === 3 ? 530 : currentStage === 2 ? 280 : 130);
 
   const ignoreCap = hasEquipment('beer') || hasEquipment('chinese_waving_cat');
@@ -483,7 +540,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const baseCritChance = hero.classId === 'rogue' ? 25 : 5;
   const itemCritChance = (hasEquipment('ancient_rune_stone') ? 10 : 0)
     + (hasEquipment('beer') ? 5 : 0)
-    + (hasEquipment('sharp_razor') ? 20 : 0)
+    + (hasEquipment('sharp_razor') ? 18 : 0)
     + (hasEquipment('blood_vile') ? 5 : 0);
   const totalCritChance = Math.min(100, baseCritChance + itemCritChance);
   const activeDisabledMoveId = entrapmentTurns > 0 ? entrapmentMoveId : disabledMoveId;
@@ -577,6 +634,57 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     });
   }, [isPlayerTurn, characterMoves, activeCooldowns, playerResource, runEquippedItems]);
 
+  const resolveCecilMeter = useMemo(() => () => {
+    setCecilMeterMoving(false);
+
+    const value = cecilMeterValue;
+    const target = enemies.find(e => e.id === cecilMeterTargetId);
+    if (!target) {
+      setShowCecilMeter(false);
+      return;
+    }
+
+    let multiplier = 1.25; // Yellow (0-40, 80-100)
+    let isRed = false;
+
+    if (value >= 70 && value <= 80) {
+      multiplier = cecilMultiplier;
+      isRed = true;
+    } else if (value >= 40 && value < 70) {
+      multiplier = 1.5;
+    }
+
+    const baseDamage = 25;
+    const finalDmg = calculateDamage(Math.floor(baseDamage * multiplier), attackToUse, target);
+
+    addLog(`🥊 Rear Cross! Meter stopped at ${value}%. Multiplier: x${multiplier}!`);
+
+    if (isRed) {
+      addLog(`🔥 MOMENTUM! Stamina refunded and Rear Cross ready for another strike!`);
+      // Refund stamina
+      setPlayerResource(prev => Math.min(maxPlayerResource, prev + 25));
+      // Refund usage (decrement current usage count)
+      setMoveUsesThisTurn(prev => ({ ...prev, cecil_rear_cross: Math.max(0, (prev.cecil_rear_cross || 0) - 1) }));
+      // Double the multiplier for the next red hit
+      setCecilMultiplier(prev => prev * 2);
+
+      // Trigger impact frame
+      setShowCecilImpactFrame(true);
+
+      // Delay closing the meter and applying damage to create a freeze frame
+      setTimeout(() => {
+        setShowCecilImpactFrame(false);
+        setShowCecilMeter(false);
+        applyPlayerAttackToEnemy(target, finalDmg, (hero.moves as Move[]).find(m => m.id === 'cecil_rear_cross'));
+      }, 600);
+    } else {
+      addLog(`💤 Momentum lost. Multiplier reset.`);
+      setCecilMultiplier(2);
+      setShowCecilMeter(false);
+      applyPlayerAttackToEnemy(target, finalDmg, (hero.moves as Move[]).find(m => m.id === 'cecil_rear_cross'));
+    }
+  }, [cecilMeterValue, enemies, cecilMeterTargetId, cecilMultiplier, attackToUse, maxPlayerResource, hero.classId]);
+
   // Handle forced enemy turn trigger (e.g. The Hare)
   useEffect(() => {
     if (triggerEnemyTurn) {
@@ -608,6 +716,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   // Cheat Code Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === ' ' && showCecilMeter && cecilMeterMoving) {
+        e.preventDefault();
+        resolveCecilMeter();
+        return;
+      }
+
       if (e.key.toLowerCase() === 'i' && (e.ctrlKey || e.altKey)) {
         addLog('🔥 DEV CHEAT: Jumping to Lord Inferno...');
         setCurrentStage(2);
@@ -727,7 +841,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentStage, maxPlayerHealth]);
+  }, [currentStage, maxPlayerHealth, showCecilMeter, cecilMeterMoving, resolveCecilMeter]);
 
   // Smooth screen shake animation
   useEffect(() => {
@@ -768,6 +882,22 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   // Player Turn Start Effects (Poison, etc.)
   useEffect(() => {
     if (!isPlayerTurn) return;
+
+    // Brawler Mechanics
+    if (hero.classId === 'brawler') {
+      setMoveUsesThisTurn({}); // Reset usages for the turn
+    }
+
+    // --- TICK DOWN PLAYER STATUS EFFECTS ---
+    if (playerTemporaryShieldTurns > 0) {
+      if (playerTemporaryShieldTurns === 1) {
+        setPlayerShield(0); // Shield expires
+        setPlayerTemporaryShieldTurns(0);
+        addLog(`🛡️ Your Guard shield expired.`);
+      } else {
+        setPlayerTemporaryShieldTurns(prev => prev - 1);
+      }
+    }
 
     // Handle Player Bleed (Lost Hunter Trait)
     if (playerBleedTurns > 0) {
@@ -858,6 +988,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }, [isPlayerTurn]);
 
   const loadLevel = (level: number, stageOverride?: number) => {
+    combatLockedRef.current = true; // Lock input during level setup
     const stageToLoad = stageOverride || currentStage;
     const levelData = stageToLoad === 1
       ? STAGE_1_LEVELS[level]
@@ -871,10 +1002,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Reset Gift from the Gods usage if entering a new stage (detected via stage override or just logic)
     // Actually, simple way: always reset it here. If we are just reloading a level (same stage) it might be an issue?
     // "Usable once per stage".
-    // If we die and restart level, should we get it back? Usually roguelikes say yes if you restart the *stage* (act), but here 'loadLevel' is called for every new level (1-1, 1-2...).
-    // Wait, 'once per stage' usually means 'once per Act' (Stage 1, Stage 2).
     // If I use it in 1-1, I shouldn't be able to use it in 1-2.
-    // So I should NOT reset it in loadLevel UNLESS it is the start of a new Stage.
+    // So it should NOT reset it in loadLevel UNLESS it is the start of a new Stage.
     // The previous implementation plan said: "In loadLevel, add setGiftFromGodsUsedThisStage(false)."
     // But loadLevel is called for every level.
     // I need to check if 'level === 1' maybe? Or rely on the fact that we change stages explicitly.
@@ -926,10 +1055,31 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Reset buff move usage and training state for new level
     setBuffMoveUsageCount(0);
     setTrainUsageCount(0);
+    setMoveUsesThisTurn({});
     setIsTraining(false);
     setTakeExtraDamageNextTurn(false);
     setLastMoveIdByEnemy({});
     lastMoveIdByEnemyRef.current = {};
+
+    // Reset Guard temporary shield at level boundaries (brawler-specific)
+    // Always zero the ref synchronously so downstream code in this function sees 0
+    if (hero.classId === 'brawler') {
+      playerShieldRef.current = 0;
+      setPlayerShield(0);
+      setPlayerTemporaryShieldTurns(0);
+    }
+
+    // Reset Feyland-specific flags on level boundaries
+    setPowerPunchTurns(0);
+    powerPunchTurnsRef.current = 0;
+    rollAndSlipDodgeActiveRef.current = false;
+    setRollAndSlipDodgeActive(false);
+
+    // Reset JJ Smith transient dodge flag on level boundaries
+    // Victory Rush state (active/stacks/streak) intentionally persists between levels
+    if (hero.id === 'jj_smith') {
+      setJjDoubleStaminaNextTurn(false);
+    }
 
     // Reset Permafrost ice shield at start of level (Meryn passive)
     if (hero.id === 'meryn') {
@@ -1162,6 +1312,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`🍺 Beer boost! +3 Max HP!`);
       }
     }
+    // Unlock combat input now that the level is fully set up
+    combatLockedRef.current = false;
   };
 
   // Dice roll helpers
@@ -1295,9 +1447,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     return { damage, preDefenseDamage };
   };
 
+  // --- Helper Functions (Moved up for hoisting safety) ---
   const addLog = (message: string) => {
     setCombatLog((prev) => [...prev, message]);
   };
+
+  const hasLavaGolem = () => enemies.some(e => e.name === 'Lava Golem' && e.currentHealth > 0);
+  const hasJester = () => enemies.some(e => e.name === 'Jester' && e.currentHealth > 0);
 
   const applyTideCallBonus = (damage: number) => {
     if (!tideCallActive) return damage;
@@ -1315,9 +1471,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     addLog('✨ Channeling empowers your next attack!');
     return 2;
   };
-
-  const hasLavaGolem = () => enemies.some(e => e.name === 'Lava Golem' && e.currentHealth > 0);
-  const hasJester = () => enemies.some(e => e.name === 'Jester' && e.currentHealth > 0);
 
   const applyFireLizardRepeatReduction = (enemy: Enemy, moveId: string, damage: number) => {
     if (enemy.name !== 'Fire Lizard') return damage;
@@ -2331,13 +2484,43 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               addLog(getJesterTaunt());
             }
 
-            const shouldDodge = guaranteedDodgeRef.current || Math.random() * 100 < totalDodgeChance;
+            // Roll & Slip: on the enemy's first attack, grants +20% dodge chance
+            // and if Feyland dodges (any reason), retaliates with 70 damage
+            let rollSlipDodgeTriggered = false;
+            let rollSlipBonusDodge = 0;
+            if (rollAndSlipDodgeActiveRef.current && (hero.id === 'feyland' || hero.id === 'jj_smith')) {
+              rollAndSlipDodgeActiveRef.current = false;
+              setRollAndSlipDodgeActive(false); // Always consume flag on first incoming attack
+              rollSlipBonusDodge = 20; // +20% extra dodge chance
+            }
+            const shouldDodge = guaranteedDodgeRef.current || Math.random() * 100 < (totalDodgeChance + rollSlipBonusDodge);
             if (shouldDodge) {
+              // If Roll & Slip is active and dodge succeeded, counter-attack
+              if (rollSlipBonusDodge > 0) {
+                rollSlipDodgeTriggered = true;
+              }
+              if (rollSlipDodgeTriggered) {
+                const counterDmg = Math.floor(70 * (1 + playerAttack * 0.02));
+                const newEnemyHealth = Math.max(0, enemy.currentHealth - counterDmg);
+                setEnemies(prev => prev.map(e => e.id === enemy.id ? { ...e, currentHealth: newEnemyHealth } : e));
+                setTotalDamageDealt(prev => prev + (enemy.currentHealth - newEnemyHealth));
+                addLog(`🥊 Roll & Slip counter! Feyland evades ${enemy.name}'s attack and retaliates for ${counterDmg} damage!`);
+                if (newEnemyHealth === 0) {
+                  setTimeout(() => handleEnemyDefeated(enemy, enemiesRef.current, []), 300);
+                }
+              } else {
+              }
               if (guaranteedDodgeRef.current) {
                 guaranteedDodgeRef.current = false;
                 setGuaranteedDodge(false);
               }
               addLog(`💨 You dodged ${enemy.name}'s attack!`);
+
+              // JJ Smith Passive: Dodging doubles next turn's stamina
+              if (hero.id === 'jj_smith') {
+                setJjDoubleStaminaNextTurn(true);
+              }
+
               // Shinjiro Passive: Shadow Meter fills on dodge
               if (hero.id === 'shinjiro') {
                 setShadowMeter(prev => {
@@ -2460,6 +2643,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
 
             damage = applyTurtleShellReduction(damage);
+
+            // Feyland Iron Wall passive: 20% DR when below 50% max HP
+            if (hero.id === 'feyland' && playerHealthRef.current < maxPlayerHealth * 0.5) {
+              damage = Math.floor(damage * 0.8);
+              addLog(`🛡️ Iron Wall! Feyland's resilience reduces incoming damage by 20%!`);
+            }
 
             if (channelingGuardActive) {
               damage = Math.floor(damage * 0.5);
@@ -2636,6 +2825,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   const endEnemyTurn = () => {
+    // If victory or defeat is already triggered, do nothing
+    if (showRewardScreen || showInterlude || showLoseScreen || combatLockedRef.current) return;
+
+    // Final safety check for alive enemies
+    const aliveEnemies = enemiesRef.current.filter(e => e.currentHealth > 0);
+    if (aliveEnemies.length === 0) return;
+
     let skipPlayerTurn = false;
     // Reset training vulnerability for the next turn
     setTakeExtraDamageNextTurn(false);
@@ -2767,6 +2963,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         return prev; // Clyde keeps his souls
       }
 
+      // Brawlers fully restore Stamina at the start of their turn
+      if (hero.classId === 'brawler') {
+        if (hero.id === 'jj_smith' && jjDoubleStaminaNextTurn) {
+          setJjDoubleStaminaNextTurn(false);
+          addLog(`⚡ JJ's Stamina is DOUBLED from a dodge! (100/50)`);
+          return 100;
+        }
+        return maxBrawlerStamina;
+      }
+
       const extraRestore = hasEquipment('blue_tinted_glasses') ? 8 : 0;
       return Math.min(maxPlayerResource, prev + 8 + extraRestore);
     });
@@ -2822,6 +3028,45 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setIsPlayerTurn(false);
       setTimeout(() => enemyTurn(enemiesRef.current, false, false), 300);
       return;
+    }
+
+    if (hero.classId === 'brawler') {
+      const heroName = hero.name;
+      addLog(`⚡ ${heroName} recovers all Stamina!`);
+    }
+
+    setMoveUsesThisTurn({});
+
+    // Feyland Power Punch logic
+    if (powerPunchTurnsRef.current > 0 && hero.id === 'feyland') {
+      if (powerPunchTurnsRef.current === 2) {
+        // Skip this turn
+        setPowerPunchTurns(1);
+        powerPunchTurnsRef.current = 1;
+        addLog(`⏳ Feyland is charging Power Punch... (Turn skipped)`);
+        setIsPlayerTurn(false);
+        setTimeout(() => enemyTurn(enemiesRef.current, false, false), 300);
+        return;
+      } else if (powerPunchTurnsRef.current === 1) {
+        // Fire it!
+        setPowerPunchTurns(0);
+        powerPunchTurnsRef.current = 0;
+        const ppTargetEnemy = enemiesRef.current.filter(e => e.currentHealth > 0)[0];
+        if (ppTargetEnemy) {
+          const ppDamage = calculateDamage(180, playerAttack, ppTargetEnemy);
+          const ppNewHealth = Math.max(0, ppTargetEnemy.currentHealth - ppDamage);
+          let updatedEnemies = enemiesRef.current.map(e => e.id === ppTargetEnemy.id ? { ...e, currentHealth: ppNewHealth } : e);
+
+          setEnemies(updatedEnemies);
+          setTotalDamageDealt(prev => prev + (ppTargetEnemy.currentHealth - ppNewHealth));
+          addLog(`💥 POWER PUNCH! Feyland unleashes 180 damage on ${ppTargetEnemy.name}!`);
+
+          if (ppNewHealth === 0) {
+            setTimeout(() => handleEnemyDefeated(ppTargetEnemy, updatedEnemies, []), 300);
+            return; // Hand off to centralized victory handler
+          }
+        }
+      }
     }
 
     setIsPlayerTurn(true);
@@ -2885,11 +3130,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
             const aliveAfter = updated.filter(e => e.currentHealth > 0);
             if (aliveAfter.length === 0) {
-              addLog(`🏆 All enemies defeated! Victory!`);
-              setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) setShowInterlude(true);
-                else setShowRewardScreen(true);
-              }, 1000);
+              return; // Victory handled by handleEnemyDefeated
             } else {
               if (updated.find(e => e.id === target.id && e.currentHealth === 0)) {
                 if (selectedTargetId === target.id) {
@@ -3029,11 +3270,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
             const aliveAfter = updated.filter(e => e.currentHealth > 0);
             if (aliveAfter.length === 0) {
-              addLog(`🏆 All enemies defeated! Victory!`);
-              setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) setShowInterlude(true);
-                else setShowRewardScreen(true);
-              }, 1000);
+              return; // Victory handled by handleEnemyDefeated
             } else {
               if (updated.find(e => e.id === target.id && e.currentHealth === 0)) {
                 if (selectedTargetId === target.id) {
@@ -3227,11 +3464,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             const stillAlive = finalState.filter(e => e.currentHealth > 0);
 
             if (stillAlive.length === 0) {
-              addLog(`🏆 All enemies defeated! Victory!`);
-              setTimeout(() => {
-                if ([3, 6, 9].includes(currentLevel)) setShowInterlude(true);
-                else setShowRewardScreen(true);
-              }, 1000);
+              return; // Victory handled by handleEnemyDefeated
             } else {
               decrementCooldowns();
               enemyTurn(finalState, false, false);
@@ -3321,6 +3554,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const startDefeatTransition = (delay = 400) => {
     if (isDefeatAnimating) return;
+    combatLockedRef.current = true; // Block inputs immediately on defeat
     setIsDefeatAnimating(true);
     setIsPlayerTurn(false);
     setIsTransitioning(true);
@@ -3455,8 +3689,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       decrementCooldowns();
       if (move) setActiveCooldowns(prev => ({ ...prev, [move.id]: move.cooldown }));
-      setIsPlayerTurn(false);
-      enemyTurn(updatedEnemies, false, false);
+
+      if (hero.classId === 'brawler') {
+        setIsPlayerTurn(true);
+      } else {
+        setIsPlayerTurn(false);
+        enemyTurn(updatedEnemies, false, false);
+      }
     }, 500);
   };
 
@@ -3470,6 +3709,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const handleMoveSelect = (move: Move) => {
     setShowMoveSelection(false);
 
+    // Block move input during level transitions (load/victory/defeat)
+    if (combatLockedRef.current) return;
+
     // Prevent move usage if not player's turn (e.g. enemy turn or animation)
     if (!isPlayerTurn && !cheatBuffer) return;
 
@@ -3481,13 +3723,81 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Track resource refund status for early exits
     let resourceRefunded = false;
 
+    // Check usage limits and combo for Brawlers
+    let brawlerFreeMove = false;
+    const uses = moveUsesThisTurn[move.id] || 0;
+
+    if (hero.classId === 'brawler') {
+      brawlerFreeMove = brunoComboMeter >= 3;
+    }
+
+    if (!brawlerFreeMove && move.maxUsesPerTurn !== undefined && uses >= move.maxUsesPerTurn) {
+      addLog(`❌ You can only use ${move.name} ${move.maxUsesPerTurn} times per turn!`);
+      return;
+    }
+
+    // Check if move is on cooldown
+    if (activeCooldowns[move.id] && activeCooldowns[move.id] > 0) {
+      addLog(`❌ ${move.name} is on cooldown for ${activeCooldowns[move.id]} more turn(s)!`);
+      return;
+    }
+
+    // Auto-Target Logic:
+    // If no target is selected, default to the first living enemy.
+    let effectiveTargetId = selectedTargetId;
+    if (!effectiveTargetId) {
+      const firstAlive = enemies.find(e => e.currentHealth > 0);
+      if (firstAlive) {
+        effectiveTargetId = firstAlive.id;
+        setSelectedTargetId(firstAlive.id); // Update UI state
+      }
+    }
+
+    // Validate target BEFORE state changes (for non-AOE attacks)
+    if (move.type === 'attack' && move.baseDamage !== undefined && move.id !== 'whirlwind' && !move.isAOE) {
+      if (!effectiveTargetId) {
+        addLog(`❌ No valid target available!`);
+        return;
+      }
+
+      const target = enemies.find(e => e.id === effectiveTargetId);
+      if (!target || target.currentHealth <= 0) {
+        addLog(`❌ Invalid target!`);
+        return;
+      }
+    }
+
+    // --- BEYOND THIS POINT, THE MOVE IS VALID AND WILL EXECUTE ---
+
+    // Track move uses THIS turn
+    if (!brawlerFreeMove) {
+      setMoveUsesThisTurn(prev => ({
+        ...prev,
+        [move.id]: (prev[move.id] || 0) + 1
+      }));
+    }
+
     // Only record player's last move for mimicry if it's a real move (not a dev cheat, not a failed action)
     if (!move.id.startsWith('dev_') && !move.id.startsWith('cheat_') && move.id !== 'invalid' && move.id !== 'none') {
       setLastPlayerMoveId(move.id);
     }
 
+    // Unified Resource Deduction (Assumes move is valid and will execute)
+    // Passive: Arcane Mastery (Elara) - 15% chance to refund mana cost
+    if (hero.uniqueAbility?.id === 'arcane_mastery') {
+      const masteryRoll = Math.random() * 100;
+      if (masteryRoll < 15) {
+        resourceRefunded = true;
+        addLog(`✨ Arcane Mastery! Spell costs no ${resourceType}!`);
+      }
+    }
+
+    if (!resourceRefunded && move.id !== 'training' && move.id !== 'six_round' && move.id !== 'soul_shot' && move.id !== 'bullet_storm' && move.id !== 'spare_bullet' && move.id !== 'reload_move') {
+      setPlayerResource(prev => Math.max(0, prev - move.cost));
+    }
+
     // Check if player has enough resource
-    if (move.id === 'training') { // Assuming 'training' is the ID for the training move
+    if (move.id === 'training') {
       if (hasLavaGolem()) {
         addLog(`🌋 Lava Golem's heat prevents training!`);
         return;
@@ -3497,7 +3807,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog('💪 You have already trained the maximum 3 times this level!');
           return;
         }
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
         setTrainUsageCount(prev => prev + 1);
         addLog(getJesterTaunt());
         decrementCooldowns();
@@ -3505,15 +3814,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         enemyTurn(enemies, false, false);
         return;
       }
-      const trainCost = 8; // Updated from 10
+      const trainCost = 8;
       if (playerResource < trainCost) {
         addLog(`❌ Not enough ${resourceType} to train! Need ${trainCost}, have ${playerResource}.`);
         return;
       }
-      // Deduct cost
+      // Training cost is custom, so we keep it here or handle it specifically. Wait, training is a special case.
+      // This is a special case where the cost is fixed and not 'move.cost', so it's not redundant with the unified block.
       setPlayerResource(prev => Math.max(0, prev - trainCost));
-      // ... rest of training move logic ...
-      // For now, just end turn as an example
       addLog(`💪 Training complete! Gained experience.`);
       endPlayerTurn(move);
       return;
@@ -3536,7 +3844,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`❌ You can only use 3 buff moves per level! (${buffMoveUsageCount}/3)`);
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      // Resource will be deducted by the unified block below
 
       const updatedEnemies = enemies.map(e => {
         if (e.name !== 'Jester') return e;
@@ -3553,7 +3861,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       });
 
       setEnemies(updatedEnemies);
-
       setBuffMoveUsageCount(prev => prev + 1);
       addLog(getJesterTaunt());
       decrementCooldowns();
@@ -3562,61 +3869,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
-    // Check if player has enough resource for other moves
-    if (playerResource < move.cost && manaSurgeTurns === 0) {
-      addLog(`❌ Not enough ${resourceType}! Need ${move.cost}, have ${playerResource}.`);
-      return;
-    }
-
-    // Check if move is on cooldown
-    if (activeCooldowns[move.id] && activeCooldowns[move.id] > 0) {
-      addLog(`❌ ${move.name} is on cooldown for ${activeCooldowns[move.id]} more turn(s)!`);
-      return;
-    }
-
-    // Auto-Target Logic:
-    // If no target is selected, default to the first living enemy.
-    let effectiveTargetId = selectedTargetId;
-    if (!effectiveTargetId) {
-      const firstAlive = enemies.find(e => e.currentHealth > 0);
-      if (firstAlive) {
-        effectiveTargetId = firstAlive.id;
-        setSelectedTargetId(firstAlive.id); // Update UI state
-      }
-    }
-
-    // Validate target BEFORE deducting resources (for non-AOE attacks)
-    if (move.type === 'attack' && move.baseDamage !== undefined && move.id !== 'whirlwind' && !move.isAOE) {
-      if (!effectiveTargetId) {
-        addLog(`❌ No valid target available!`);
-        return;
-      }
-
-      const target = enemies.find(e => e.id === effectiveTargetId);
-      if (!target || target.currentHealth <= 0) {
-        addLog(`❌ Invalid target!`);
-        return;
-      }
-    }
-
     if (hero.id === 'dearborn' && move.id !== 'strike' && move.id !== 'wave_crash') {
       upgradeDearbornStrike();
     }
 
-
-    // Deduct resource cost
-
-    // Passive: Arcane Mastery (Elara) - 15% chance to refund mana cost
-    if (hero.uniqueAbility?.id === 'arcane_mastery') {
-      const masteryRoll = Math.random() * 100;
-      if (masteryRoll < 15) {
-        resourceRefunded = true;
-        addLog(`✨ Arcane Mastery! Spell costs no ${resourceType}!`);
+    // Handle Brawler Combo Meter tracking (Bruno only)
+    if (hero.id === 'bruno') {
+      if (brawlerFreeMove) {
+        setBrunoComboMeter(0); // Reset meter after using the combo
+      } else {
+        setBrunoComboMeter(prev => Math.min(3, prev + 1));
       }
-    }
-
-    if (!resourceRefunded && move.id !== 'six_round' && move.id !== 'bullet_storm' && move.id !== 'spare_bullet') {
-      // Resource deduction moved to specific blocks to prevent energy loss on failed moves.
     }
 
     // Cedric Meter Logic (Duality Class) - Moved to top to catch AOE moves
@@ -3664,7 +3927,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setDualityMeter(prev => Math.min(4, prev + 1)); // Add Rhythm Flow stack
         addLog(`🎵 On-Beat! Restored 10 Energy & Gained 1 Rhythm Flow!`);
       } else if (move.id === 'conductor') {
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
         setPlayerShield(prev => prev + 15);
         // Guaranteed Stun
         const targetId = effectiveTargetId;
@@ -3724,27 +3986,26 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         enemyTurn(enemies, false, false);
         return; // End turn
       } else if (move.id.startsWith('symphony')) {
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
         setShowSymphonyEffect(true);
         setTimeout(() => {
           setShowSymphonyEffect(false);
           setShowRhythmGame(true);
           setCurrentRhythmType(dualityForm as 'keyboard' | 'drums' | 'violin');
-        }, 1800); // 1.8s for the effect
-        return; // Wait for game completion
+        }, 1800);
+        return;
       }
+    }
+
+    // --- Interactive Moves (RPS) ---
+    if (move.id === 'rps') {
+      setRpsPendingMove(move);
+      setShowRPS(true);
+      return;
     }
 
     // Unified Gunslinger Crit Logic (skip for multi-hit moves, handled internally)
     let guaranteedGunslingerCrit = false;
 
-    // Duality Move: Rock Paper Scissors Interactive Trigger
-    if (move.id === 'rps') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
-      setRpsPendingMove(move);
-      setShowRPS(true);
-      return;
-    }
     if (hero.classId === 'gunslinger' && move.cost > 0 && move.id !== 'six_round' && move.id !== 'soul_shot' && move.id !== 'bullet_storm') {
       const threshold = (hero.uniqueAbility?.id === 'last_chamber') ? 6 : 10;
       const nextBulletsSpent = bulletsSpent + move.cost;
@@ -3770,7 +4031,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Gunslinger Move: Reload
     if (move.id === 'reload_move') {
       const reloadAmt = 4;
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      // Resource cost (0) is already handled by unified block above if it ever has one
       setPlayerResource(prev => Math.min(8, prev + reloadAmt));
       addLog(`🔫 Reloading! +${reloadAmt} Bullets! Turn ends.`);
       decrementCooldowns();
@@ -3803,7 +4064,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Warrior: Windswept Fury (AOE)
     if (move.id === 'windswept_fury') {
-      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       const aliveEnemies = enemies.filter(e => e.currentHealth > 0);
       let totalFuryDamage = 0;
@@ -3860,7 +4120,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Mage: Mana Surge (Buff)
     if (move.id === 'mana_surge') {
       // Costs mana to cast, then grants free spells
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       setManaSurgeTurns(3);
       addLog(`✨ Mana Surge activated! Your moves cost 0 Mana for 3 turns!`);
@@ -3873,7 +4132,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Rogue: Speed Blitz (Speed Scaling)
     if (move.id === 'speed_blitz') {
-      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       const target = enemies.find(e => e.id === effectiveTargetId)!;
       const speedBonus = Math.floor(effectiveSpeed * 0.2);
@@ -3900,7 +4158,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Paladin: Hammer Combo
     if (move.id === 'hammer_combo') {
-      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       if (hammerComboStage === 0) {
         // Stage 1: Single Target 30 dmg
@@ -3955,7 +4212,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Gunslinger: Spare Bullet (Buff)
     if (move.id === 'spare_bullet') {
-      if (manaSurgeTurns === 0 && !resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       setGuaranteedCrit(true);
       guaranteedCritRef.current = true;
@@ -3969,7 +4225,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Clyde Move: OUTRAGE (Space key spam mechanic with epic visual effects)
     if (move.id === 'outrage') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       // Start OUTRAGE sequence
       setShowOutrageUI(true);
@@ -4135,7 +4390,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 // Check for victory
                 const defeated = updatedEnemies.filter(e => e.currentHealth === 0);
                 defeated.forEach(e => {
-                  handleEnemyDefeated(e, updatedEnemies);
+                  handleEnemyDefeated(e, updatedEnemies, []);
                 });
 
                 const aliveAfter = updatedEnemies.filter(e => e.currentHealth > 0);
@@ -4167,7 +4422,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (move.id === 'energy_drink') {
       const healAmt = 15;
       const energyAmt = 30;
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       setPlayerResource(prev => Math.min(maxPlayerResource, prev + energyAmt));
       addLog(`🥤 Energy Drink! +${healAmt} HP and +${energyAmt} Energy!`);
@@ -4183,7 +4437,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`❌ Gift from the Gods can only be used once per stage!`);
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       setGiftFromGodsUsedThisStage(true);
       // Player chooses shield or max HP - for now we'll alternate or you can add a UI
       const choice = Math.random() < 0.5 ? 'shield' : 'hp';
@@ -4212,7 +4465,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         addLog(`❌ Not enough meter! (${dualityMeter}/4)`);
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       // Transform to ghoul form
       setDualityForm('ghoul');
@@ -4236,7 +4488,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setCharacterMoves(hero.moves); // Safety reset
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
 
       // Trigger Transformation Visuals
       setShowTransformationEffect(true);
@@ -4268,7 +4519,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Duality Move: Hibernate
     if (move.id === 'hibernate') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       setPlayerHealth(maxPlayerHealth);
       isSleepingRef.current = true;
       setIsSleeping(true);
@@ -4281,7 +4531,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Cedric ROAR Buff/Debuff (Must be BEFORE AOE damage block)
     if (move.id === 'roar') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       setEnemies(prev => prev.map(e => ({ ...e, weaknessTurns: 2 })));
       setPermanentUpgrades(prev => {
         if (hero.id === 'clyde') {
@@ -4310,9 +4559,23 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
+    if (move.id === 'power_punch') {
+      setPowerPunchTurns(2); // Next turn skipped, then fires on turn after
+      powerPunchTurnsRef.current = 2;
+      addLog(`💪 Feyland is charging his punch up! (-${move.cost} ${resourceType})`);
+
+      if (hero.classId === 'brawler') {
+        setIsPlayerTurn(true);
+      } else {
+        decrementCooldowns();
+        setIsPlayerTurn(false);
+        enemyTurn(enemiesRef.current, false, false);
+      }
+      return;
+    }
+
     if (move.type === 'attack' && move.baseDamage !== undefined) {
       const channelingMultiplier = move.id === 'smite' ? 1 : consumeChannelingAttackBuff();
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       // Special handling for Smite (scaled by enemy max HP)
       if (move.id === 'smite') {
         const target = enemies.find(e => e.id === effectiveTargetId)!;
@@ -4918,6 +5181,186 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
 
 
+      // --- JJ Smith Roll & Slip: Same mechanic as Feyland's but different ID ---
+      if (move.id === 'jj_roll_and_slip') {
+        // Resource already deducted by the outer attack block
+        const rsTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === effectiveTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
+        if (rsTarget) {
+          const rsDamage = calculateDamage(20, playerAttack, rsTarget);
+          const rsNewHealth = Math.max(0, rsTarget.currentHealth - rsDamage);
+          const rsUpdatedEnemies = enemies.map(e => e.id === rsTarget.id ? { ...e, currentHealth: rsNewHealth } : e);
+          setEnemies(rsUpdatedEnemies);
+          setTotalDamageDealt(prev => prev + (rsTarget.currentHealth - rsNewHealth));
+          addLog(`🥊 Roll & Slip! JJ deals ${rsDamage} damage and braces. Next enemy attack grants +20% dodge! (-${move.cost} ${resourceType})`);
+          if (rsNewHealth === 0) {
+            setTimeout(() => handleEnemyDefeated(rsTarget, rsUpdatedEnemies, []), 300);
+          }
+        } else {
+          addLog(`🥊 Roll & Slip! JJ braces for a counter. Next enemy attack grants +20% dodge! (-${move.cost} ${resourceType})`);
+        }
+        rollAndSlipDodgeActiveRef.current = true;
+        setRollAndSlipDodgeActive(true);
+        setLastPlayerMoveId(move.id);
+        return;
+      }
+
+      // --- JJ Smith Rapid Punches ---
+      if (move.id === 'rapid_punches') {
+        const rpTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === effectiveTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
+        if (!rpTarget) {
+          addLog(`❌ No valid target for Rapid Punches!`);
+          return;
+        }
+
+        // Calculate total effective crit rate
+        let critThreshold = 20;
+        if (hasEquipment('ancient_rune_stone')) critThreshold -= 2;
+        if (hasEquipment('sharp_razor')) critThreshold -= 4;
+        if (hasEquipment('blood_vile')) critThreshold -= 1;
+        const equipCritReduction = Math.floor(equipCritBonus / 5) || 0;
+        critThreshold -= equipCritReduction;
+        critThreshold = Math.max(2, critThreshold);
+
+        const gearCritRate = (21 - critThreshold) * 5;
+        const victoryRushBonus = jjVictoryRushActive ? jjVictoryRushStacks * 10 : 0;
+        const totalCritRate = gearCritRate + victoryRushBonus;
+
+        if (jjVictoryRushActive) {
+          setJjVictoryRushActive(false);
+          setJjCritStreak(0);
+          setJjVictoryRushStacks(0);
+          addLog(`💥 Victory Rush EXPENDED for Rapid Punches! (${totalCritRate}% Crit Rate used)`);
+        }
+
+        addLog(`👊 Rapid Punches! JJ winds up for ${jjPunches} punches on ${rpTarget.name}! (-${move.cost} ${resourceType})`);
+
+        const baseHitDamage = 8;
+        const punchCount = jjPunches;
+        const PUNCH_DELAY = 120;
+
+        const punchResults: { dmg: number; wouldCrit: boolean }[] = [];
+        let simHealth = rpTarget.currentHealth;
+        let totalRpDamage = 0;
+        let pseudoCritCount = 0;
+
+        for (let i = 0; i < punchCount; i++) {
+          if (simHealth <= 0) break;
+          const wouldCrit = Math.random() * 100 < totalCritRate;
+          if (wouldCrit) pseudoCritCount++;
+          const dmg = calculateDamage(baseHitDamage, playerAttack, rpTarget);
+          totalRpDamage += dmg;
+          simHealth = Math.max(0, simHealth - dmg);
+          punchResults.push({ dmg, wouldCrit });
+        }
+
+        if (pseudoCritCount > 0) {
+          const punchCap = currentStage === 1 ? 20 : (currentStage === 2 ? 30 : (currentStage === 3 ? 40 : 50));
+          setJjPunches(prev => {
+            const next = prev + pseudoCritCount;
+            if (next > punchCap) {
+              addLog(`✴️ ${pseudoCritCount} would-be crit(s)! Punch counter increased to ${punchCap} (Stage ${currentStage} cap)!`);
+              return punchCap;
+            }
+            return next;
+          });
+        }
+
+        let cumulativeDmg = 0;
+        punchResults.forEach(({ dmg, wouldCrit }, i) => {
+          setTimeout(() => {
+            cumulativeDmg += dmg;
+            setEnemies(prev => prev.map(e => {
+              if (e.id !== rpTarget.id) return e;
+              const newHealth = Math.max(0, e.currentHealth - dmg);
+              return { ...e, currentHealth: newHealth };
+            }));
+            setTotalDamageDealt(prev => prev + dmg);
+
+            if (wouldCrit) {
+              addLog(`✴️ Punch ${i + 1}: ${dmg} dmg — Would-be crit! (+1 Punch)`);
+            } else {
+              addLog(`🥊 Punch ${i + 1}: ${dmg} dmg`);
+            }
+
+            if (i === punchResults.length - 1) {
+              const finalHealth = Math.max(0, rpTarget.currentHealth - cumulativeDmg);
+              addLog(`✅ Rapid Punches done! ${punchCount} punches, ${totalRpDamage} total damage.`);
+
+              if (finalHealth === 0) {
+                combatLockedRef.current = true;
+                setEnemies(prev => {
+                  const snapshot = prev.map(e => e.id === rpTarget.id ? { ...e, currentHealth: 0 } : e);
+                  const aliveCount = snapshot.filter(e => e.currentHealth > 0).length;
+                  setTimeout(() => {
+                    handleEnemyDefeated(rpTarget, snapshot, []);
+                    if (aliveCount > 0) {
+                      combatLockedRef.current = false;
+                      setIsPlayerTurn(true);
+                    }
+                  }, 300);
+                  return snapshot;
+                });
+              } else {
+                consumePlayerWeaknessTurn();
+                setLastPlayerMoveId(move.id);
+                decrementCooldowns();
+                setIsPlayerTurn(true);
+              }
+            }
+          }, PUNCH_DELAY * (i + 1));
+        });
+        return;
+      }
+
+      // --- Cecil Lysander: Rear Cross ---
+      if (move.id === 'cecil_rear_cross') {
+        const cecilTarget = enemies.find(e => e.id === effectiveTargetId) || enemies.find(e => e.currentHealth > 0);
+        if (cecilTarget) {
+          setCecilMeterTargetId(cecilTarget.id);
+          setCecilMeterValue(0);
+          cecilMeterDirection.current = 1;
+          setShowCecilMeter(true);
+          setCecilMeterMoving(true);
+          addLog(`🥊 Cecil winds up for a REAR CROSS! Space or click to stop the meter!`);
+        }
+        return;
+      }
+
+      // --- Cecil Lysander: Right Hook ---
+      if (move.id === 'right_hook' && hero.id === 'cecil_lysander') {
+        const target = enemies.find(e => e.id === effectiveTargetId) || enemies.find(e => e.currentHealth > 0);
+        if (target) {
+          const dmg = calculateDamage(20, attackToUse, target);
+          applyPlayerAttackToEnemy(target, dmg, move);
+          addLog(`🥊 Right Hook! Dealt ${dmg} damage to ${target.name}.`);
+        }
+        setLastPlayerMoveId(move.id);
+        return;
+      }
+
+      // --- Roll & Slip: handle before general attack so baseDamage=0 doesn't do min damage ---
+      if (move.id === 'roll_and_slip') {
+        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+        const rsTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === effectiveTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
+        if (rsTarget) {
+          const rsDamage = Math.floor(20 * (1 + playerAttack * 0.02));
+          const rsNewHealth = Math.max(0, rsTarget.currentHealth - rsDamage);
+          const rsUpdatedEnemies = enemies.map(e => e.id === rsTarget.id ? { ...e, currentHealth: rsNewHealth } : e);
+          setEnemies(rsUpdatedEnemies);
+          setTotalDamageDealt(prev => prev + (rsTarget.currentHealth - rsNewHealth));
+          addLog(`\ud83e\udd4a Roll & Slip! Dealt ${rsDamage} damage and braced for a counter. Next enemy attack grants +20% dodge chance! (-${move.cost} ${resourceType})`);
+          if (rsNewHealth === 0) {
+            setTimeout(() => handleEnemyDefeated(rsTarget, rsUpdatedEnemies, []), 300);
+          }
+        } else {
+          addLog(`\ud83e\udd4a Roll & Slip! Braced for a counter. Next enemy attack grants +20% dodge chance! (-${move.cost} ${resourceType})`);
+        }
+        rollAndSlipDodgeActiveRef.current = true;
+        setRollAndSlipDodgeActive(true);
+        setLastPlayerMoveId(move.id);
+        return; // Prevent general attack handler from running, but keep player's turn active
+      }
+
       // Target is already validated above, we can safely use it
       const target = enemies.find(e => e.id === effectiveTargetId)!;
 
@@ -4929,7 +5372,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       // Check for guaranteed critical hit conditions
       const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
-      const isCritical = isNaturalCrit || guaranteedGunslingerCrit || darkPactCrit || consumeGuaranteedCrit();
+      // JJ Smith Victory Rush: each stack adds +10% crit chance (bonus roll in addition to d20)
+      const jjVictoryRushCrit = hero.id === 'jj_smith' && jjVictoryRushActive && Math.random() * 100 < jjVictoryRushStacks * 10;
+      const isCritical = isNaturalCrit || jjVictoryRushCrit || guaranteedGunslingerCrit || darkPactCrit || consumeGuaranteedCrit();
+
+      let damageMultiplier = 1;
+
+      if (hero.classId === 'brawler' && brawlerFreeMove) {
+        damageMultiplier = 1.2; // +20% damage on combo hit
+      }
 
       if (isCritical) {
         addLog('[DEBUG] Calling maybeApplyBeerBoost from main attack flow');
@@ -4941,11 +5392,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
 
       // Unholy Headpiece: Attack moves cost 8% max HP but deal +30% damage
-      let damageMultiplier = 1;
       if (hasEquipment('unholy_headpiece')) {
         const hpCost = Math.floor(maxPlayerHealth * 0.08);
         setPlayerHealth(prev => Math.max(1, prev - hpCost));
-        damageMultiplier = 1.3;
+        damageMultiplier *= 1.3;
         addLog(`👹 Unholy Headpiece sacrifices ${hpCost} HP for power!`);
       }
 
@@ -4964,10 +5414,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         damage = calculateDamage(move.baseDamage || 0, attackToUse, target);
       }
 
-      if (isNaturalCrit && hasEquipment('ancient_rune_stone')) {
-        guaranteedDodgeRef.current = true;
-        setGuaranteedDodge(true);
-        addLog(`🪨 Ancient Rune Stone glows! Your next dodge is GUARANTEED!`);
+      if (isCritical && hasEquipment('ancient_rune_stone')) {
+        setPlayerShield(prev => prev + 5);
+        addLog(`🪨 Ancient Rune Stone glows! Gained 5 Shield from the crit!`);
       }
 
       damage = Math.floor(damage * damageMultiplier);
@@ -4985,7 +5434,31 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       applyFairyBellLifesteal(damage);
       maybeTriggerSharpRazor(isCritical);
 
-
+      // JJ Smith Victory Rush: Track crits and update stacks after isCritical is determined
+      if (hero.id === 'jj_smith' && isCritical && move.id !== 'rapid_punches') {
+        const newStreak = jjCritStreak + 1;
+        setJjCritStreak(newStreak);
+        if (newStreak >= 2) {
+          if (!jjVictoryRushActive) {
+            setJjVictoryRushActive(true);
+            setJjVictoryRushStacks(1);
+            addLog(`⚡ VICTORY RUSH ACTIVATED! JJ gains +10% Crit Rate!`);
+          } else {
+            const newStacks = jjVictoryRushStacks + 1;
+            setJjVictoryRushStacks(newStacks);
+            addLog(`⚡ Victory Rush grows! +${newStacks * 10}% Crit Rate total!`);
+          }
+        }
+      } else if (hero.id === 'jj_smith' && !isCritical && move.id !== 'rapid_punches') {
+        if (jjCritStreak > 0 || jjVictoryRushActive) {
+          setJjCritStreak(0);
+          if (jjVictoryRushActive) {
+            setJjVictoryRushActive(false);
+            setJjVictoryRushStacks(0);
+            addLog(`💨 Victory Rush ENDED - missed a crit!`);
+          }
+        }
+      }
 
       // Special handling for Quick Strike (Speed scaling)
       if (move.scalesWithSpeed) {
@@ -5008,6 +5481,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         const healAmount = 15;
         setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
         addLog(`✨ Holy Wrath heals you for ${healAmount} HP!`);
+      }
+
+      // Lunge Jab: 5% chance to inflict bleed
+      if (move.id === 'lunge_jab' && Math.random() < 0.05) {
+        setPlayerBleedTurns(prev => prev); // Bleed on enemy, not player
+        // We need to apply bleed to the target enemy
+        setEnemies(prev => prev.map(e => e.id === target.id ? { ...e, poisonTurns: (e.poisonTurns || 0) + 2 } : e));
+        addLog(`🩸 Lunge Jab causes ${target.name} to BLEED! (2 turns)`);
       }
 
       // Passive: Battle Rage (Thora) - 50% more damage if below 50% HP
@@ -5169,14 +5650,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
         const aliveEnemies = updatedEnemies.filter(e => e.currentHealth > 0);
         if (aliveEnemies.length === 0) {
-          addLog(`🏆 All enemies defeated! Victory!`);
-          setTimeout(() => {
-            if (currentLevel % 3 === 0) {
-              setShowInterlude(true);
-            } else {
-              setShowRewardScreen(true);
-            }
-          }, 1000);
+          return; // Victory handled by handleEnemyDefeated
         } else if (!aliveEnemies.find(e => e.id === selectedTargetId)) {
           setSelectedTargetId(aliveEnemies[0].id);
         }
@@ -5187,6 +5661,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           decrementCooldowns();
           setIsPlayerTurn(true);
           // Skip enemy response, immediately return control to the player
+        } else if (hero.classId === 'brawler') {
+          setIsPlayerTurn(true);
         } else {
           // For non-Aldric or if Aldric didn't kill anyone, proceed with normal flow
           decrementCooldowns();
@@ -5263,6 +5739,42 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       setTideCallActive(true);
       addLog(`🌊 Tide Call! Next attack deals +50% damage and you heal ${healAmt} HP! (-${move.cost} ${resourceType})`);
+    } else if (move.id === 'guard' && hero.classId === 'brawler') {
+      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      const shieldAmount = Math.floor(maxPlayerHealth * 0.1);
+      setPlayerShield(prev => prev + shieldAmount);
+      setPlayerTemporaryShieldTurns(1);
+      addLog(`🛡️ Guard! Gained ${shieldAmount} Shield for 1 turn. (-${move.cost} ${resourceType})`);
+    } else if (move.id === 'quick_guard') {
+      const qgShield = Math.floor(maxPlayerHealth * 0.1);
+      setPlayerShield(prev => prev + qgShield);
+      addLog(`🛡️ Quick Guard! Gained ${qgShield} Shield. (-${move.cost} ${resourceType})`);
+      if (hero.classId === 'brawler') setIsPlayerTurn(true);
+      else endPlayerTurn(move);
+    } else if (move.id === 'band_aid') {
+      const healAmt = Math.floor(maxPlayerHealth * 0.25);
+      setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
+      addLog(`🩹 Band-aid! Healed for ${healAmt} HP (25% Max HP). (-${move.cost} ${resourceType})`);
+      if (hero.classId === 'brawler') setIsPlayerTurn(true);
+      else endPlayerTurn(move);
+    } else if (move.id === 'roll_and_slip') {
+      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      // Instant 20 damage
+      const rsTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === selectedTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
+      if (rsTarget) {
+        const rsDamage = Math.floor(20 * (1 + playerAttack * 0.02));
+        const rsNewHealth = Math.max(0, rsTarget.currentHealth - rsDamage);
+        setEnemies(prev => prev.map(e => e.id === rsTarget.id ? { ...e, currentHealth: rsNewHealth } : e));
+        setTotalDamageDealt(prev => prev + (rsTarget.currentHealth - rsNewHealth));
+        addLog(`🥊 Roll & Slip! Dealt ${rsDamage} damage and braced for a counter. Next enemy attack has +20% dodge chance — retaliate with 70 dmg on success! (-${move.cost} ${resourceType})`);
+        if (rsNewHealth === 0) {
+          setTimeout(() => handleEnemyDefeated(rsTarget, enemies, []), 300);
+        }
+      } else {
+        addLog(`🥊 Roll & Slip! Braced for a counter. Next enemy attack has +20% dodge chance (+70 dmg retaliate)! (-${move.cost} ${resourceType})`);
+      }
+      rollAndSlipDodgeActiveRef.current = true;
+      setRollAndSlipDodgeActive(true);
     } else if (move.type === 'buff' && move.defenseBoost !== undefined) {
       if (buffMoveUsageCount >= 3) {
         addLog(`❌ You can only use 3 buff moves per level! (${buffMoveUsageCount}/3)`);
@@ -5299,9 +5811,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // For all attack moves (single-target), the turn ending is handled in the setTimeout above to prevent double calls
     // For buff/utility moves, end the turn normally here
     if (move.type !== 'attack' || move.id === 'health_tonic') {
-      consumePlayerWeaknessTurn();
-      decrementCooldowns();
-
       // Stealth Kick Extra Turn Logic
       if (move.id === 'stealth_kick' && Math.random() * 100 < 25) {
         addLog(`👟 Stealth Kick! GO AGAIN!`);
@@ -5309,8 +5818,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         return;
       }
 
-      setIsPlayerTurn(false);
-      enemyTurn(updatedEnemies, false, false);
+      if (hero.classId === 'brawler') {
+        setIsPlayerTurn(true);
+      } else {
+        consumePlayerWeaknessTurn();
+        decrementCooldowns();
+        setIsPlayerTurn(false);
+        enemyTurn(updatedEnemies, false, false);
+      }
     }
   };
 
@@ -5640,6 +6155,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       } else {
         const nextLevel = currentLevel + 1;
         setCurrentLevel(nextLevel);
+        if (hero.classId === 'brawler') {
+          setPlayerResource(maxPlayerResource);
+        }
         loadLevel(nextLevel);
         setIsTransitioning(false);
       }
@@ -5977,6 +6495,23 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         }
       }
     }
+
+    // --- Centralized Victory Check ---
+    const allEnemiesDead = currentEnemies.every(e => e.currentHealth === 0);
+    if (allEnemiesDead && !showRewardScreen && !showInterlude && !showLoseScreen) {
+      addLog(`🏆 All enemies defeated! Victory!`);
+      combatLockedRef.current = true; // Block inputs during victory transition
+      setIsPlayerTurn(false); // Disable fight buttons immediately
+      decrementCooldowns();
+
+      setTimeout(() => {
+        if (currentLevel % 3 === 0) {
+          setShowInterlude(true);
+        } else {
+          setShowRewardScreen(true);
+        }
+      }, 1000);
+    }
   };
 
   const handleTrain = () => {
@@ -6113,6 +6648,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setTotalGoldEarned(0);
     setShowLoseScreen(false);
     setCharacterMoves(hero.moves);
+    setMoveUsesThisTurn({});
     setBuffMoveUsageCount(0);
     setBossChargeCount(0);
     setBossDespTriggered(false);
@@ -6349,10 +6885,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           <img
             src={
               activeStyleId === 'japanese-mountainscape' ? mountainStyleArt :
-              activeStyleId === 'fairy-forest' ? animeForestStyleArt :
-              activeStyleId === 'fairy-meeting' ? fairyMeetingArt :
-              activeStyleId === 'Graceful-sleep' ? gracefulSleepArt :
-              animeStyleArt
+                activeStyleId === 'fairy-forest' ? animeForestStyleArt :
+                  activeStyleId === 'fairy-meeting' ? fairyMeetingArt :
+                    activeStyleId === 'Graceful-sleep' ? gracefulSleepArt :
+                      animeStyleArt
             }
             alt=""
             className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none"
@@ -6971,7 +7507,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       {/* Stage Decorations */}
       <StageBackground stage={currentStage} />
 
-      <div className="relative z-10 size-full flex flex-col">
+      <div className="relative z-10 flex-1 min-h-0 w-full flex flex-col">
 
         <AnimatePresence>
           {showRPS && (
@@ -7007,6 +7543,148 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                     </button>
                   ))}
                 </div>
+              </motion.div>
+            </motion.div>
+          )}
+          {showCecilImpactFrame && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [1, 1, 0] }}
+              transition={{ duration: 0.6, times: [0, 0.8, 1] }}
+              className="fixed inset-0 z-[200] pointer-events-none flex flex-col justify-center overflow-hidden"
+            >
+              {/* Dimming Background */}
+              <div className="absolute inset-0 bg-black/70 mix-blend-multiply" />
+              <div className="absolute inset-0 bg-red-950/40 mix-blend-color-burn" />
+
+              {/* Electric Lightning Shapes */}
+              <svg className="absolute inset-0 w-full h-full" viewBox="0 0 1000 1000" preserveAspectRatio="none">
+                {/* Main Red Bolt */}
+                <motion.path
+                  d="M-50,200 L200,450 L350,150 L600,550 L800,250 L1100,600"
+                  stroke="red" strokeWidth="25" fill="none"
+                  initial={{ pathLength: 0, opacity: 1 }}
+                  animate={{ pathLength: 1, opacity: 0 }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  style={{ filter: "drop-shadow(0 0 20px red)" }}
+                />
+                {/* Thick Black Bolt */}
+                <motion.path
+                  d="M-50,800 L250,550 L450,850 L700,450 L900,750 L1150,300"
+                  stroke="black" strokeWidth="35" fill="none"
+                  initial={{ pathLength: 0, opacity: 1 }}
+                  animate={{ pathLength: 1, opacity: 0 }}
+                  transition={{ duration: 0.4, ease: "easeOut", delay: 0.05 }}
+                  style={{ filter: "drop-shadow(0 0 10px rgba(255,0,0,0.5))" }}
+                />
+                {/* Sharp White/Pink Inner Bolt */}
+                <motion.path
+                  d="M300,-100 L450,250 L600,400 L350,650 L500,900 L480,1100"
+                  stroke="#ff4444" strokeWidth="15" fill="none"
+                  initial={{ pathLength: 0, opacity: 1 }}
+                  animate={{ pathLength: 1, opacity: 0 }}
+                  transition={{ duration: 0.45, ease: "easeOut", delay: 0.1 }}
+                  style={{ filter: "drop-shadow(0 0 15px white)" }}
+                />
+              </svg>
+
+              {/* Central Impact Burst */}
+              <motion.div
+                initial={{ scale: 0, opacity: 1 }}
+                animate={{ scale: 5, opacity: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-red-500 rounded-full mix-blend-screen blur-[30px]"
+              />
+            </motion.div>
+          )}
+
+          {showCecilMeter && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-md p-6"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (cecilMeterMoving) resolveCecilMeter();
+              }}
+            >
+              <motion.div
+                initial={{ scale: 0.9, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                className="relative bg-slate-900 border-2 border-red-600/50 rounded-3xl p-8 max-w-lg w-full text-center shadow-2xl"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <Swords className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <h3 className="text-3xl font-black text-slate-100 uppercase tracking-tighter mb-2 italic">Rear Cross</h3>
+                <p className="text-slate-400 text-sm mb-8 font-medium italic">Stop in the <span className="text-red-500 font-bold underline">RED ZONE</span> for Momentum!</p>
+
+                {/* The Meter */}
+                <div className="relative h-14 w-full bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-700 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] mb-8">
+                  {/* Yellow Zone 1 */}
+                  <div className="absolute inset-y-0 left-0 w-[40%] bg-yellow-500/20" />
+                  {/* Orange Zone */}
+                  <div className="absolute inset-y-0 left-[40%] w-[30%] bg-orange-600/30" />
+                  {/* Red Zone */}
+                  <div className="absolute inset-y-0 left-[70%] w-[10%] bg-red-600/80 shadow-[0_0_25px_rgba(220,38,38,0.4)] flex items-center justify-center">
+                    <div className="w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,rgba(255,255,255,0.1)_5px,rgba(255,255,255,0.1)_10px)]" />
+                  </div>
+                  {/* Yellow Zone 2 */}
+                  <div className="absolute inset-y-0 left-[80%] w-[20%] bg-yellow-500/20" />
+
+                  {/* Indicator Marks */}
+                  <div className="absolute inset-0 flex justify-between px-2 pointer-events-none opacity-10">
+                    {[...Array(21)].map((_, i) => (
+                      <div key={i} className={`h-full w-px ${i % 5 === 0 ? 'bg-white h-full' : 'bg-white/50 h-1/2 mt-auto'}`} />
+                    ))}
+                  </div>
+
+                  {/* The Needle/Pointer */}
+                  <motion.div
+                    className="absolute inset-y-0 w-1.5 bg-white z-20 shadow-[0_0_15px_rgba(255,255,255,1)]"
+                    style={{ left: `${cecilMeterValue}%` }}
+                    animate={{ scaleY: cecilMeterMoving ? [1, 1.05, 1] : 1 }}
+                    transition={{ repeat: Infinity, duration: 0.15 }}
+                  >
+                    <div className="absolute -top-1 -left-1.5 w-4 h-4 bg-white rotate-45 border-2 border-slate-900" />
+                    <div className="absolute -bottom-1 -left-1.5 w-4 h-4 bg-white rotate-45 border-2 border-slate-900" />
+                  </motion.div>
+                </div>
+
+                <div className="flex justify-between items-center bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                  <div className="text-left">
+                    <div className="text-[10px] text-slate-500 uppercase font-black tracking-[0.2em] mb-1">Momentum Power</div>
+                    <div className="flex items-end gap-3">
+                      <div className="text-4xl font-black text-white italic tracking-tighter leading-none">
+                        <span className="text-slate-500 text-2xl mr-1 font-medium">x</span>
+                        {cecilMultiplier}
+                      </div>
+                      <div className="text-sm font-bold text-red-400 mb-1">
+                        {(() => {
+                          const target = enemies.find(e => e.id === cecilMeterTargetId);
+                          if (!target) return null;
+                          const projectedDamage = calculateDamage(Math.floor(25 * cecilMultiplier), attackToUse, target);
+                          return `Projected: ${projectedDamage} DMG`;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onPointerDown={(e) => {
+                      e.preventDefault(); // Prevent double firing if onClick somehow triggers too
+                      if (cecilMeterMoving) resolveCecilMeter();
+                    }}
+                    className="h-16 px-10 bg-gradient-to-br from-red-500 to-red-700 text-white font-black uppercase tracking-tighter rounded-xl shadow-lg shadow-red-900/40 hover:scale-105 active:scale-95 transition-all text-xl italic"
+                  >
+                    HIT !!
+                  </button>
+                </div>
+
+                <p className="mt-6 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                  [ Press <span className="text-slate-300">SPACE</span> to trigger momentum ]
+                </p>
               </motion.div>
             </motion.div>
           )}
@@ -7157,7 +7835,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           )}
         </AnimatePresence>
         {/* Top Combat Area */}
-        <div className="flex-1 overflow-auto p-4 sm:p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pb-2">
           <div className="max-w-6xl mx-auto">
             {/* Header - Stage Info */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
@@ -7308,6 +7986,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   wolfgangNoteMeter={wolfgangNoteMeter}
                   lucianSoulMeter={lucianSoulMeter}
                   clydeSouls={clydeSouls}
+                  brunoComboMeter={brunoComboMeter}
+                  powerPunchCharged={powerPunchTurns > 0}
+                  jjVictoryRushActive={jjVictoryRushActive}
+                  jjVictoryRushStacks={jjVictoryRushStacks}
+                  jjPunches={jjPunches}
                   eliShieldActive={eliShieldActive}
                   eliShieldCharge={eliShieldCharge}
                   maxEliShield={maxEliShield}
@@ -7353,113 +8036,115 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 />
               </div>
             </div>
+          </div>
 
-            {/* Combat Log */}
-            {/* Combat Log */}
-            <div className="relative bg-slate-950/80 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl shadow-black/40 flex flex-col h-[200px]">
-              {/* Scanline Overlay */}
-              <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] pointer-events-none z-20 opacity-50" />
+          {/* Combat Log */}
+          {/* Combat Log */}
+          <div className="relative bg-slate-950/80 backdrop-blur-md border border-slate-700/50 rounded-2xl overflow-hidden shadow-xl shadow-black/40 flex flex-col h-[200px]">
+            {/* Scanline Overlay */}
+            <div className="absolute inset-0 bg-[linear-gradient(transparent_0%,rgba(0,0,0,0.1)_50%)] bg-[length:100%_4px] pointer-events-none z-20 opacity-50" />
 
-              {/* Header */}
-              <div className="bg-slate-900/90 border-b border-slate-700/50 px-4 py-2 flex items-center justify-between z-30">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50" />
-                  </div>
-                  <span className="text-xs text-slate-400 font-mono uppercase tracking-widest ml-2">Battlelog.exe</span>
+            {/* Header */}
+            <div className="bg-slate-900/90 border-b border-slate-700/50 px-4 py-2 flex items-center justify-between z-30">
+              <div className="flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/50" />
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50" />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                  <span className="text-[10px] text-green-400 font-mono">LIVE</span>
-                </div>
+                <span className="text-xs text-slate-400 font-mono uppercase tracking-widest ml-2">Battlelog.exe</span>
               </div>
-
-              {/* Log Content */}
-              <div className="p-4 overflow-y-auto flex-1 font-mono text-xs sm:text-sm space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent z-10">
-                <AnimatePresence mode="popLayout" initial={false}>
-                  {[...combatLog].reverse().map((log, index) => (
-                    <motion.div
-                      key={`${log}-${combatLog.length - 1 - index}`}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className={`flex items-start gap-2 ${index === 0 ? 'text-white font-bold' : 'text-slate-400'}`}
-                    >
-                      <span className="text-slate-600 select-none shrink-0">{'>'}</span>
-                      <span>{log}</span>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {/* Turn Indicators */}
-                {isPlayerTurn && (
-                  <motion.div
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 text-green-400/80 pt-2 border-t border-slate-800/50 mt-2"
-                  >
-                    <span className="animate-pulse">_</span>
-                    <span>Awaiting command...</span>
-                  </motion.div>
-                )}
-                {!isPlayerTurn && (
-                  <motion.div
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 text-red-400/80 pt-2 border-t border-slate-800/50 mt-2"
-                  >
-                    <span className="animate-spin duration-[3000ms]">⟳</span>
-                    <span>Enemy acting...</span>
-                  </motion.div>
-                )}
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                <span className="text-[10px] text-green-400 font-mono">LIVE</span>
               </div>
+            </div>
+
+            {/* Log Content */}
+            <div className="p-4 overflow-y-auto flex-1 font-mono text-xs sm:text-sm space-y-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent z-10">
+              <AnimatePresence mode="popLayout" initial={false}>
+                {[...combatLog].reverse().map((log, index) => (
+                  <motion.div
+                    key={`${log}-${combatLog.length - 1 - index}`}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`flex items-start gap-2 ${index === 0 ? 'text-white font-bold' : 'text-slate-400'}`}
+                  >
+                    <span className="text-slate-600 select-none shrink-0">{'>'}</span>
+                    <span>{log}</span>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+
+              {/* Turn Indicators */}
+              {isPlayerTurn && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="flex items-center gap-2 text-green-400/80 pt-2 border-t border-slate-800/50 mt-2"
+                >
+                  <span className="animate-pulse">_</span>
+                  <span>Awaiting command...</span>
+                </motion.div>
+              )}
+              {!isPlayerTurn && (
+                <motion.div
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                  className="flex items-center gap-2 text-red-400/80 pt-2 border-t border-slate-800/50 mt-2"
+                >
+                  <span className="animate-spin duration-[3000ms]">⟳</span>
+                  <span>Enemy acting...</span>
+                </motion.div>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
 
 
-        {/* Bottom Action Area */}
-        {
-          !showMoveSelection && !showItemSelection ? (
-            <div className="bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6">
+      {/* Bottom Action Area */}
+      {
+        !showMoveSelection && !showItemSelection ? (
+          <div className="shrink-0 bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6 pb-6 sm:pb-8">
 
-              <HeroActionPanel
-                isPlayerTurn={isPlayerTurn}
-                onFight={handleFight}
-                onUseItem={handleUseItem}
-                onTrain={handleTrain}
-                onBlock={handleBlock}
-                blockCooldownTurns={blockCooldownTurns}
-                playerAttack={playerAttack}
-                attackCap={attackCap}
-              />
-            </div>
-          ) : showMoveSelection ? (
-            <MoveSelection
-              moves={characterMoves}
-              onSelectMove={handleMoveSelect}
-              onClose={() => setShowMoveSelection(false)}
-              currentResource={playerResource}
-              resourceType={resourceType as 'Mana' | 'Energy'}
-              activeCooldowns={activeCooldowns}
-              classId={hero.classId}
-              disabledMoveId={activeDisabledMoveId}
+            <HeroActionPanel
+              isPlayerTurn={isPlayerTurn}
+              onFight={handleFight}
+              onUseItem={handleUseItem}
+              onTrain={handleTrain}
+              onBlock={handleBlock}
+              blockCooldownTurns={blockCooldownTurns}
+              playerAttack={playerAttack}
+              attackCap={attackCap}
             />
-          ) : (
-            <ItemSelection
-              inventory={inventory}
-              onUseItem={handleItemSelect}
-              onClose={() => setShowItemSelection(false)}
-              currentHealth={playerHealth}
-              maxHealth={maxPlayerHealth}
-              currentResource={playerResource}
-              maxResource={maxPlayerResource}
-              resourceType={resourceType}
-            />
-          )
-        }
-      </div >
+          </div>
+        ) : showMoveSelection ? (
+          <MoveSelection
+            moves={characterMoves}
+            onSelectMove={handleMoveSelect}
+            onClose={() => setShowMoveSelection(false)}
+            currentResource={playerResource}
+            resourceType={resourceType as 'Mana' | 'Energy'}
+            activeCooldowns={activeCooldowns}
+            classId={hero.classId}
+            disabledMoveId={activeDisabledMoveId}
+            moveUsesThisTurn={moveUsesThisTurn}
+            brunoComboMeter={brunoComboMeter}
+          />
+        ) : (
+          <ItemSelection
+            inventory={inventory}
+            onUseItem={handleItemSelect}
+            onClose={() => setShowItemSelection(false)}
+            currentHealth={playerHealth}
+            maxHealth={maxPlayerHealth}
+            currentResource={playerResource}
+            maxResource={maxPlayerResource}
+            resourceType={resourceType}
+          />
+        )
+      }
     </div >
   );
 }

@@ -38,6 +38,13 @@ interface HeroStatusPanelProps {
     wolfgangNoteMeter?: number;
     lucianSoulMeter?: number;
     clydeSouls?: number;
+    brunoComboMeter?: number;
+    powerPunchCharged?: boolean; // Feyland Power Punch state
+
+    // JJ Smith Specifics
+    jjVictoryRushActive?: boolean;
+    jjVictoryRushStacks?: number;
+    jjPunches?: number;
 
     // Eli Specifics
     eliShieldActive?: boolean;
@@ -94,6 +101,11 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
     wolfgangNoteMeter = 0,
     lucianSoulMeter = 0,
     clydeSouls = 0,
+    brunoComboMeter = 0,
+    powerPunchCharged = false,
+    jjVictoryRushActive = false,
+    jjVictoryRushStacks = 0,
+    jjPunches = 5,
     eliShieldActive,
     eliShieldCharge = 0,
     maxEliShield = 0,
@@ -152,16 +164,48 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                                 </span>
                             </div>
                         </TooltipTrigger>
-                        <TooltipContent sideOffset={5} className="bg-slate-900 border-slate-700">
+                        <TooltipContent sideOffset={5} className="bg-slate-900 border-slate-700 min-w-[160px]">
                             <div className="space-y-1">
-                                <p className="text-xs font-bold text-orange-400 uppercase">Crit Chance</p>
-                                <p className="text-[10px] text-slate-300">Base: {baseCritChance}%</p>
-                                {itemCritChance > 0 && <p className="text-[10px] text-slate-300">Items: +{itemCritChance}%</p>}
-                                {guaranteedCrit && <p className="text-[10px] text-purple-300">Guaranteed Crit Ready!</p>}
-                                <div className="border-t border-slate-700 pt-1 mt-1">
-                                    <p className="text-[10px] font-bold text-orange-300">Total: {totalCritChance}%</p>
-                                    <p className="text-[10px] text-slate-500 mt-1">Stat Cap: {attackCap}</p>
+                                <p className="text-xs font-bold text-orange-400 uppercase tracking-wide mb-2">⚔️ Crit Chance</p>
+
+                                {/* Breakdown rows */}
+                                <div className="flex justify-between text-[10px]">
+                                    <span className="text-slate-400">Base ({hero.classId === 'rogue' ? 'Rogue' : 'Standard'})</span>
+                                    <span className="text-slate-200 font-bold">{baseCritChance}%</span>
                                 </div>
+                                {itemCritChance > 0 && (
+                                    <div className="flex justify-between text-[10px]">
+                                        <span className="text-yellow-400">Items</span>
+                                        <span className="text-yellow-300 font-bold">+{itemCritChance}%</span>
+                                    </div>
+                                )}
+                                {jjVictoryRushActive && jjVictoryRushStacks > 0 && (
+                                    <div className="flex justify-between text-[10px]">
+                                        <span className="text-yellow-400">⚡ Victory Rush</span>
+                                        <span className="text-yellow-300 font-bold">+{jjVictoryRushStacks * 10}%</span>
+                                    </div>
+                                )}
+                                {guaranteedCrit && (
+                                    <div className="flex justify-between text-[10px]">
+                                        <span className="text-purple-400">Guaranteed Crit</span>
+                                        <span className="text-purple-300 font-bold">Next Hit!</span>
+                                    </div>
+                                )}
+
+                                {/* Total + bar */}
+                                <div className="border-t border-slate-700 pt-1.5 mt-1">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] text-slate-400 uppercase tracking-wide">Total</span>
+                                        <span className="text-[11px] font-black text-orange-300">{Math.min(100, totalCritChance + (jjVictoryRushActive ? (jjVictoryRushStacks ?? 0) * 10 : 0))}%</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-orange-500 to-red-400 rounded-full transition-all"
+                                            style={{ width: `${Math.min(100, totalCritChance + (jjVictoryRushActive ? (jjVictoryRushStacks ?? 0) * 10 : 0))}%` }}
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-[9px] text-slate-600 mt-1">ATK stat cap: {attackCap}</p>
                             </div>
                         </TooltipContent>
                     </Tooltip>
@@ -263,7 +307,7 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                         <div className="absolute inset-0 bg-cyan-200/20 backdrop-blur-[2px] border-2 border-cyan-300/30 rounded-full" />
                     )}
                 </div>
-            </div>
+            </div >
 
             {/* Resource Bar */}
             <div className="mb-4 relative z-10">
@@ -286,27 +330,29 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                 </div>
 
                 {/* Gunslinger Bullets View */}
-                {hero.classId === 'gunslinger' && (
-                    <div className="flex gap-0.5 mt-1 h-1.5">
-                        {Array.from({ length: maxPlayerResource }).map((_, i) => {
-                            const threshold = (hero.uniqueAbility?.id === 'last_chamber') ? 6 : 10;
-                            const nextCritNum = Math.ceil((bulletsSpent + 1) / threshold) * threshold;
-                            const bulletNum = bulletsSpent + (playerResource - i);
-                            const isNextBullet = i === playerResource - 1;
-                            const isCrit = bulletNum === nextCritNum || (guaranteedCrit && isNextBullet);
+                {
+                    hero.classId === 'gunslinger' && (
+                        <div className="flex gap-0.5 mt-1 h-1.5">
+                            {Array.from({ length: maxPlayerResource }).map((_, i) => {
+                                const threshold = (hero.uniqueAbility?.id === 'last_chamber') ? 6 : 10;
+                                const nextCritNum = Math.ceil((bulletsSpent + 1) / threshold) * threshold;
+                                const bulletNum = bulletsSpent + (playerResource - i);
+                                const isNextBullet = i === playerResource - 1;
+                                const isCrit = bulletNum === nextCritNum || (guaranteedCrit && isNextBullet);
 
-                            return (
-                                <div
-                                    key={i}
-                                    className={`flex-1 rounded-sm ${i < playerResource
-                                        ? isCrit ? 'bg-red-500 shadow-[0_0_5px_red]' : 'bg-slate-500'
-                                        : 'bg-slate-800'}`}
-                                />
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
+                                return (
+                                    <div
+                                        key={i}
+                                        className={`flex-1 rounded-sm ${i < playerResource
+                                            ? isCrit ? 'bg-red-500 shadow-[0_0_5px_red]' : 'bg-slate-500'
+                                            : 'bg-slate-800'}`}
+                                    />
+                                );
+                            })}
+                        </div>
+                    )
+                }
+            </div >
 
             {/* Debuffs Row */}
             <div className="flex flex-wrap gap-2 mb-4 min-h-[24px]">
@@ -318,82 +364,84 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                 {statusEffects.weakness > 0 && <Badge type="weakness" value={statusEffects.weakness} />}
                 {statusEffects.speedDebuff > 0 && <Badge type="webbed" value={statusEffects.speedDebuff} />}
                 {statusEffects.pollen > 0 && <Badge type="pollen" value={statusEffects.pollen} />}
-            </div>
+            </div >
 
             {/* Artifacts Row */}
-            {Object.values(artifacts).some(c => c > 0) && (
-                <div className="flex flex-wrap gap-1.5 mb-4 px-1">
-                    {Object.entries(artifacts).filter(([_, count]) => count > 0).map(([artifactId, count]) => {
-                        const artifactNames: Record<string, string> = {
-                            golden_apple: '🍎',
-                            golden_crown: '👑',
-                            finished_rubix_cube: '🎲',
-                            disco_ball: '🪩',
-                            lucky_charm: '🍀',
-                            wooden_mask: '🎭',
-                            slime_boots: '🟢',
-                            pirates_chest: '🏴‍☠️',
-                            turtle_shell: '🐢',
-                        };
-                        return (
-                            <Tooltip key={artifactId}>
-                                <TooltipTrigger asChild>
-                                    <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 rounded px-1.5 py-0.5 cursor-help hover:bg-yellow-500/20 transition-colors">
-                                        <span className="text-xs">{artifactNames[artifactId] || '✨'}</span>
-                                        {count > 1 && <span className="text-[9px] font-bold text-yellow-500">x{count}</span>}
-                                    </div>
-                                </TooltipTrigger>
-                                <TooltipContent sideOffset={5} className="bg-slate-900 border-slate-700">
-                                    <p className="text-xs font-bold text-yellow-400 capitalize">{artifactId.replace(/_/g, ' ')}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        );
-                    })}
-                </div>
-            )}
+            {
+                Object.values(artifacts).some(c => c > 0) && (
+                    <div className="flex flex-wrap gap-1.5 mb-4 px-1">
+                        {Object.entries(artifacts).filter(([_, count]) => count > 0).map(([artifactId, count]) => {
+                            const artifactNames: Record<string, string> = {
+                                golden_apple: '🍎',
+                                golden_crown: '👑',
+                                finished_rubix_cube: '🎲',
+                                disco_ball: '🪩',
+                                lucky_charm: '🍀',
+                                wooden_mask: '🎭',
+                                slime_boots: '🟢',
+                                pirates_chest: '🏴‍☠️',
+                                turtle_shell: '🐢',
+                            };
+                            return (
+                                <Tooltip key={artifactId}>
+                                    <TooltipTrigger asChild>
+                                        <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 rounded px-1.5 py-0.5 cursor-help hover:bg-yellow-500/20 transition-colors">
+                                            <span className="text-xs">{artifactNames[artifactId] || '✨'}</span>
+                                            {count > 1 && <span className="text-[9px] font-bold text-yellow-500">x{count}</span>}
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent sideOffset={5} className="bg-slate-900 border-slate-700">
+                                        <p className="text-xs font-bold text-yellow-400 capitalize">{artifactId.replace(/_/g, ' ')}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            );
+                        })}
+                    </div>
+                )
+            }
 
             <div className="h-px bg-slate-700/50 w-full mb-4" />
 
             {/* Passives & Unique Mechanics */}
             <div className="space-y-3 relative z-10">
 
-                                {/* Shinjiro Shadow Meter */}
-                                {hero.id === 'shinjiro' && (
-                                      <div className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 border border-purple-700/40 rounded-xl p-2 mb-2 w-full">
-                                        <div className="flex justify-between text-[10px] font-bold uppercase text-purple-300 mb-1">
-                                            <span>Shadow Meter</span>
-                                            <span>{shadowMeter}/2</span>
-                                        </div>
-                                        <div className="h-1 bg-slate-900 rounded-full overflow-hidden flex gap-0.5">
-                                            {[0, 1].map(i => (
-                                                <div key={i} className={`flex-1 transition-all duration-200 ${i < shadowMeter ? 'bg-purple-500 shadow-[0_0_6px_purple]' : 'bg-slate-800'}`} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                {/* Shinjiro Shadow Meter */}
+                {hero.id === 'shinjiro' && (
+                    <div className="bg-gradient-to-r from-slate-900 via-purple-900 to-slate-900 border border-purple-700/40 rounded-xl p-2 mb-2 w-full">
+                        <div className="flex justify-between text-[10px] font-bold uppercase text-purple-300 mb-1">
+                            <span>Shadow Meter</span>
+                            <span>{shadowMeter}/2</span>
+                        </div>
+                        <div className="h-1 bg-slate-900 rounded-full overflow-hidden flex gap-0.5">
+                            {[0, 1].map(i => (
+                                <div key={i} className={`flex-1 transition-all duration-200 ${i < shadowMeter ? 'bg-purple-500 shadow-[0_0_6px_purple]' : 'bg-slate-800'}`} />
+                            ))}
+                        </div>
+                    </div>
+                )}
 
-                                {/* Wolfgang Instrument Selection & Duality Stacks */}
-                                {hero.id === 'wolfgang' && (
-                                    <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 border border-indigo-700/40 rounded-xl p-2 flex flex-col gap-2 mb-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Instrument</span>
-                                            <span className="text-[11px] text-white bg-indigo-700/40 px-2 py-0.5 rounded-lg border border-indigo-400/30 uppercase font-bold tracking-wider">
-                                                {dualityForm === 'keyboard' && 'Keyboard'}
-                                                {dualityForm === 'drums' && 'Drums'}
-                                                {dualityForm === 'violin' && 'Violin'}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-purple-300 font-bold uppercase tracking-widest">Rhythm Flow</span>
-                                            <div className="flex gap-1">
-                                                {[1, 2, 3, 4].map(i => (
-                                                    <div key={i} className={`w-4 h-4 rounded-full border-2 ${i <= dualityMeter ? 'bg-purple-500 border-purple-300 shadow-[0_0_8px_purple]' : 'bg-slate-800 border-slate-700'}`} />
-                                                ))}
-                                            </div>
-                                            <span className="text-[10px] text-purple-200 ml-2">{dualityMeter}/4</span>
-                                        </div>
-                                    </div>
-                                )}
+                {/* Wolfgang Instrument Selection & Duality Stacks */}
+                {hero.id === 'wolfgang' && (
+                    <div className="bg-gradient-to-r from-indigo-900 via-purple-900 to-indigo-900 border border-indigo-700/40 rounded-xl p-2 flex flex-col gap-2 mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-indigo-300 font-bold uppercase tracking-widest">Instrument</span>
+                            <span className="text-[11px] text-white bg-indigo-700/40 px-2 py-0.5 rounded-lg border border-indigo-400/30 uppercase font-bold tracking-wider">
+                                {dualityForm === 'keyboard' && 'Keyboard'}
+                                {dualityForm === 'drums' && 'Drums'}
+                                {dualityForm === 'violin' && 'Violin'}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-purple-300 font-bold uppercase tracking-widest">Rhythm Flow</span>
+                            <div className="flex gap-1">
+                                {[1, 2, 3, 4].map(i => (
+                                    <div key={i} className={`w-4 h-4 rounded-full border-2 ${i <= dualityMeter ? 'bg-purple-500 border-purple-300 shadow-[0_0_8px_purple]' : 'bg-slate-800 border-slate-700'}`} />
+                                ))}
+                            </div>
+                            <span className="text-[10px] text-purple-200 ml-2">{dualityMeter}/4</span>
+                        </div>
+                    </div>
+                )}
                 {/* Passive Header */}
                 <div className="flex items-center gap-2 mb-2">
                     <Sparkles className="w-3.5 h-3.5 text-purple-400" />
@@ -472,6 +520,65 @@ export const HeroStatusPanel: React.FC<HeroStatusPanelProps> = ({
                     </div>
                 )}
 
+                {/* Bruno Combo Meter - Bruno only */}
+                {hero.id === 'bruno' && (
+                    <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Three-Hit-Combo</span>
+                            <div className="flex gap-1.5">
+                                {[1, 2, 3].map(i => (
+                                    <div
+                                        key={i}
+                                        className={`w-6 h-2 md:h-2.5 rounded-sm skew-x-[-15deg] transition-all duration-300 ${i <= brunoComboMeter ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-slate-800 border border-slate-700/50'}`}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-red-500/70 font-mono uppercase text-right">
+                            {brunoComboMeter === 3 ? 'COMBO READY - ZERO STAMINA' : `${brunoComboMeter} / 3 HITS`}
+                        </p>
+                    </div>
+                )}
+
+                {/* Feyland Power Punch Indicator */}
+                {hero.id === 'feyland' && powerPunchCharged && (
+                    <div className="bg-orange-950/30 border border-orange-600/40 rounded-xl p-3 animate-pulse">
+                        <div className="flex justify-between items-center">
+                            <span className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">💪 Power Punch</span>
+                            <span className="text-[10px] text-orange-300 font-mono uppercase font-bold">UNLEASHING NEXT TURN</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* JJ Smith Victory Rush & Punches */}
+                {hero.id === 'jj_smith' && (
+                    <div className="space-y-2">
+                        <div className={`rounded-xl p-3 border ${jjVictoryRushActive ? 'bg-yellow-950/30 border-yellow-500/50 animate-pulse' : 'bg-slate-950/40 border-slate-800/60'}`}>
+                            <div className="flex justify-between items-center mb-1">
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${jjVictoryRushActive ? 'text-yellow-400' : 'text-slate-400'}`}>
+                                    ⚡ Victory Rush
+                                </span>
+                                {jjVictoryRushActive && (
+                                    <span className="text-[10px] text-yellow-300 font-mono font-bold">+{jjVictoryRushStacks * 10}% CRIT</span>
+                                )}
+                            </div>
+                            {jjVictoryRushActive ? (
+                                <div className="flex gap-1">
+                                    {Array.from({ length: Math.min(jjVictoryRushStacks, 5) }).map((_, i) => (
+                                        <div key={i} className="flex-1 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_6px_rgba(234,179,8,0.8)]" />
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-[10px] text-slate-500 font-mono">Land 2 crits to activate</p>
+                            )}
+                        </div>
+                        <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-2 flex justify-between items-center">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">👊 Punches</span>
+                            <span className="text-[10px] text-white font-mono font-bold">{jjPunches}</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Lucian Soul Meter */}
                 {hero.id === 'lucian' && (
                     <SoulMeterUI currentSoul={lucianSoulMeter} maxSoul={5000} attackBonus={Math.floor(lucianSoulMeter / 10)} />
@@ -521,7 +628,7 @@ const Badge = ({ type, value, isLethal }: { type: string, value: number, isLetha
 
     return (
         <div className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border border-white/5 ${style.color} ${style.bg} flex items-center gap-1`}>
-            {style.label} <span className="text-white/50">Video{value}</span>
+            {style.label} <span className="text-white/50">{value}</span>
         </div>
     );
 }

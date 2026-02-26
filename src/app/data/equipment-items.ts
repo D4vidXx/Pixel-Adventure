@@ -95,7 +95,7 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         id: 'ancient_rune_stone',
         name: 'Ancient Rune Stone',
         description: '+10% Crit Chance',
-        passiveDescription: 'Landing a natural crit guarantees you will dodge the next attack.',
+        passiveDescription: 'Landing a critical hit grants 5 Shield.',
         cost: 200,
         icon: '🪨',
     },

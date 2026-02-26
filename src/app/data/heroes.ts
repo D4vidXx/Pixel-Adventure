@@ -1,5 +1,5 @@
 import { Move } from '../components/MoveSelection';
-import { WARRIOR_BASIC_MOVES, DEARBORN_MOVES, MAGE_BASIC_MOVES, ROGUE_BASIC_MOVES, PALADIN_BASIC_MOVES, GUNSLINGER_BASIC_MOVES, DUALITY_BASIC_MOVES, WOLFGANG_KEYBOARD_MOVES, WOLFGANG_DRUMS_MOVES, WOLFGANG_VIOLIN_MOVES, CLYDE_NORMAL_MOVES, CLYDE_GHOUL_MOVES, ELARA_MAGE_MOVES, ZEPHYR_MAGE_MOVES, MERYN_MAGE_MOVES, LUCIAN_MOVES } from './basic-moves';
+import { WARRIOR_BASIC_MOVES, DEARBORN_MOVES, MAGE_BASIC_MOVES, ROGUE_BASIC_MOVES, PALADIN_BASIC_MOVES, GUNSLINGER_BASIC_MOVES, DUALITY_BASIC_MOVES, WOLFGANG_KEYBOARD_MOVES, WOLFGANG_DRUMS_MOVES, WOLFGANG_VIOLIN_MOVES, CLYDE_NORMAL_MOVES, CLYDE_GHOUL_MOVES, ELARA_MAGE_MOVES, ZEPHYR_MAGE_MOVES, MERYN_MAGE_MOVES, LUCIAN_MOVES, BRUNO_MOVES, FEYLAND_MOVES, JJ_SMITH_MOVES, CECIL_LYSANDER_MOVES } from './basic-moves';
 
 export interface Hero {
   id: string;
@@ -487,6 +487,90 @@ export const DUALITY_HEROES: Hero[] = [
   },
 ];
 
+// Brawler Heroes
+export const BRAWLER_HEROES: Hero[] = [
+  {
+    id: 'bruno',
+    name: 'Bruno Pachiaco',
+    classId: 'brawler',
+    title: 'The Heavyweight',
+    description: 'A relentless fighter who uses Stamina to unleash devastating combos.',
+    stats: {
+      health: 115,
+      attack: 65,
+      defense: 10,
+      speed: 35,
+    },
+    resourceType: 'Stamina',
+    uniqueAbility: {
+      id: 'three_hit_combo',
+      name: 'Three-Hit-Combo',
+      description: 'Passive: Every hit builds a bar (up to 3). When full, the next skill costs 0 Stamina, deals +20% damage, and bypasses usage limits.',
+    },
+    moves: BRUNO_MOVES,
+  },
+  {
+    id: 'feyland',
+    name: 'Feyland Dawnbright',
+    classId: 'brawler',
+    title: 'The Counter-Striker',
+    description: 'A quick, defensive brawler who turns the tables with evasion and power charges.',
+    stats: {
+      health: 120,
+      attack: 25,
+      defense: 75,
+      speed: 15,
+    },
+    resourceType: 'Stamina',
+    uniqueAbility: {
+      id: 'feyland_iron_will',
+      name: 'Iron Wall',
+      description: 'Passive: When below 50% max HP, gain 20% damage reduction.',
+    },
+    moves: FEYLAND_MOVES,
+  },
+  {
+    id: 'jj_smith',
+    name: 'JJ Smith',
+    classId: 'brawler',
+    title: 'The Rapid Striker',
+    description: 'A nimble brawler who stacks critical hits to enter Victory Rush and unleashes flurries of punches.',
+    stats: {
+      health: 90,
+      attack: 40,
+      defense: 15,
+      speed: 70,
+    },
+    resourceType: 'Stamina',
+    uniqueAbility: {
+      id: 'jj_victory_rush',
+      name: 'Victory Rush',
+      description: 'Dodging doubles next turns Stamina. Two consecutive crits enter Victory Rush (+10% Crit Rate). Crit rate goes up 10% per crit until you fail to crit.',
+    },
+    moves: JJ_SMITH_MOVES,
+  },
+  {
+    id: 'cecil_lysander',
+    name: 'Cecil Lysander',
+    classId: 'brawler',
+    title: 'The Timing Striker',
+    description: 'A precise fighter who masters momentum and timing to unleash devastating blows.',
+    stats: {
+      health: 100,
+      attack: 30,
+      defense: 30,
+      speed: 30,
+    },
+    resourceType: 'Stamina',
+    uniqueAbility: {
+      id: 'cecil_momentum',
+      name: 'Momentum',
+      description: 'Passive: Successful "Rear Cross" red hits refund stamina and usage, then double the next red multiplier.',
+    },
+    moves: CECIL_LYSANDER_MOVES,
+  },
+];
+
 export const ALL_HEROES = [
   ...WARRIOR_HEROES,
   ...MAGE_HEROES,
@@ -494,6 +578,7 @@ export const ALL_HEROES = [
   ...PALADIN_HEROES,
   ...GUNSLINGER_HEROES,
   ...DUALITY_HEROES,
+  ...BRAWLER_HEROES,
 ];
 
 export function getHeroesByClass(classId: string): Hero[] {
@@ -510,6 +595,8 @@ export function getHeroesByClass(classId: string): Hero[] {
       return GUNSLINGER_HEROES;
     case 'duality':
       return DUALITY_HEROES;
+    case 'brawler':
+      return BRAWLER_HEROES;
     default:
       return [];
   }

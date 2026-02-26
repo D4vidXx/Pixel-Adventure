@@ -10,6 +10,7 @@ import animeForestStyleArt from '../../assets/anime-forest.png';
 import fairyMeetingArt from '../../assets/fairy-meeting.png';
 import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import { Difficulty, DIFFICULTY_CONFIG } from '../data/difficulty';
+import { PATCH_NOTES } from '../data/patch-notes';
 
 interface MainMenuProps {
   onPlay: () => void;
@@ -48,7 +49,7 @@ export function MainMenu({
   useEffect(() => {
     // Check if user has seen the latest patch notes
     const lastSeenPatchVersion = localStorage.getItem('lastSeenPatchVersion');
-    const currentVersion = '1.6.1';
+    const currentVersion = PATCH_NOTES[0].version;
 
     if (lastSeenPatchVersion !== currentVersion) {
       setHasNewPatchNotes(true);
@@ -328,7 +329,7 @@ export function MainMenu({
             </h1>
 
             <p className="text-red-400/80 tracking-[0.3em] uppercase text-[10px] font-bold">
-              v1.6.1 // Roguelike Journey
+              v1.6.2 // Roguelike Journey
             </p>
           </motion.div>
 
@@ -446,7 +447,7 @@ export function MainMenu({
               onClick={() => {
                 setShowPatchNotes(true);
                 setHasNewPatchNotes(false);
-                localStorage.setItem('lastSeenPatchVersion', '1.5.3');
+                localStorage.setItem('lastSeenPatchVersion', PATCH_NOTES[0].version);
               }}
               className="mt-2 text-xs text-slate-400 hover:text-purple-300 uppercase tracking-widest font-semibold transition-colors flex items-center justify-center gap-2 py-2"
             >

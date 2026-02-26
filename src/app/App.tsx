@@ -80,7 +80,7 @@ export default function App() {
         window.removeEventListener('pointerdown', unmute);
       };
       window.addEventListener('pointerdown', unmute);
-      audio.play().catch(() => {});
+      audio.play().catch(() => { });
     } else {
       audio.pause();
       audio.currentTime = 0;
@@ -268,7 +268,7 @@ export default function App() {
   };
 
   return (
-    <div className="size-full relative" style={{ background: activeBackground.style }}>
+    <div className="w-full h-[100dvh] relative overflow-hidden" style={{ background: activeBackground.style }}>
       {/* Global Menu Music (persists across all menus except battle) */}
       <audio
         ref={menuMusicRef}

@@ -11,6 +11,77 @@ export interface PatchNote {
 
 export const PATCH_NOTES: PatchNote[] = [
     {
+        version: '1.6.2',
+        date: '2026-02-24',
+        title: 'Brawlers Unleashed & Quality of Life Update',
+        description: 'Introducing the brand-new Brawler class alongside four unique heroes, a massive overhaul to shop pacing, and crucial bug fixes.',
+        sections: [
+            {
+                title: '🥊 New Class - Brawler',
+                items: [
+                    'Brawlers use a unique resource: Stamina!',
+                    'Stamina completely regenerates at the start of every turn.',
+                    'Action Economy: Brawlers can attack multiple times in a single turn as long as they have the Stamina to spend.',
+                ]
+            },
+            {
+                title: '🥊 New Hero - Cecil Lysander',
+                items: [
+                    'Cecil Lysander joins the roster as a timing-focused Brawler!',
+                    'Signature Move: "Rear Cross" features an active-timed meter mini-game.',
+                    'Stop the meter in the Red Zone to refund stamina and trigger "Momentum"!',
+                    'Momentum Multiplier: Successive red hits double your multiplier (x2 -> x4 -> x8 -> x16).',
+                    'Impact Frames: Hitting the red zone triggers a 600ms "freeze frame" with screen-dimming and electric lightning effects.',
+                ]
+            },
+            {
+                title: '🥊 New Hero - Bruno Pachiaco',
+                items: [
+                    'Bruno Pachiaco joins the roster as a heavyweight Brawler.',
+                    'Passive - Three-Hit-Combo: Every hit builds a combo bar. At 3 stacks, his next skill costs 0 Stamina, deals +20% damage, and bypasses usage limits.',
+                    'New Moves: Fake-Out Uppercut, Knock-Out Punch, and Guard.',
+                ]
+            },
+            {
+                title: '🥊 New Hero - Feyland Dawnbright',
+                items: [
+                    'Feyland Dawnbright joins the roster as a counter-striking Brawler.',
+                    'Passive - Iron Wall: When below 50% max HP, gain 20% flat damage reduction.',
+                    'Signature Move - Power Punch: Skip your next turn to charge up and automatically deal massive damage.',
+                    'Signature Move - Roll & Slip: Gain +20% dodge chance; if you dodge, immediately retaliate for heavy damage.',
+                ]
+            },
+            {
+                title: '🥊 New Hero - JJ Smith',
+                items: [
+                    'JJ Smith joins the roster as a rapid-striking Brawler.',
+                    'Passive - Victory Rush: Dodging doubles next turn\'s Stamina. Two consecutive crits enter Victory Rush (+10% Crit Rate per crit until you fail to crit).',
+                    'Signature Move: Lunge Jab (deals damage with a chance to cause Bleed).',
+                ]
+            },
+            {
+                title: '⛺ Shop & Interlude Pacing',
+                items: [
+                    'Dramatically improved the pacing of the game by changing when the Interlude (Shop & Rest) screen appears.',
+                    'The Interlude screen now appears dynamically every 3 levels (e.g., Level 3, 6, 9, 12, 15, etc.) instead of hard-stopping after early game levels.',
+                ]
+            },
+            {
+                title: '🐛 Bug Fixes & Adjustments',
+                items: [
+                    'Resolved a devastating White Screen error that crashed the game upon entering battle.',
+                    'Fixed a bug where the Elf King could attack twice in one turn. Confirmed Aurora Blast as his primary attack.',
+                    'Fixed missing enemy stat errors (added baseDamage to Pixie, speed to Lava Pebble) which resolved multiple silent crashes.',
+                    'Standardized the `handleEnemyDefeated` method signature across the entire codebase to prevent progression blockers.',
+                    'Fixed Battle UI clipping issues that cut off action buttons on certain screen sizes.',
+                    'Fixed redundant/double stamina consumption on Quick Guard and Band-Aid.',
+                    'Fixed a multiplier bug where Rear Cross was erroneously scaling by x4 instead of x2 per hit.',
+                    'Cecil\'s Quick Guard shield rebalanced to provide 10% Max HP (was previously overtuned at 30%).',
+                ]
+            }
+        ]
+    },
+    {
         version: '1.6.1',
         date: '2026-02-18',
         title: 'Battle UI Overhaul & Healing Logic',

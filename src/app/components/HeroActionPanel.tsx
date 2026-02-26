@@ -43,7 +43,7 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
             variants={container}
             initial="hidden"
             animate="show"
-            className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4"
+            className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 pb-8 sm:pb-12"
         >
             {/* FIGHT ACTION */}
             <motion.button
@@ -83,7 +83,7 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
                 disabled={!isPlayerTurn}
                 className={`group relative px-4 sm:px-8 py-4 sm:py-6 border rounded-2xl transition-all duration-300 overflow-hidden ${isPlayerTurn
                     ? 'bg-gradient-to-br from-purple-900/40 to-purple-950/30 hover:from-purple-900/60 hover:to-purple-900/40 text-slate-100 border-purple-600/30 hover:border-purple-500 shadow-lg shadow-purple-900/20 backdrop-blur-sm'
-                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed backdrop-blur-sm'
+                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed rounded-xl backdrop-blur-sm'
                     }`}
             >
                 <div className="absolute inset-0 bg-purple-500/0 group-hover:bg-purple-500/10 transition-colors duration-300" />
@@ -108,7 +108,7 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
                 disabled={!isPlayerTurn}
                 className={`group relative px-4 sm:px-8 py-4 sm:py-6 border rounded-2xl transition-all duration-300 overflow-hidden ${isPlayerTurn
                     ? 'bg-gradient-to-br from-amber-900/40 to-amber-950/30 hover:from-amber-900/60 hover:to-amber-900/40 text-slate-100 border-amber-600/30 hover:border-amber-500 shadow-lg shadow-amber-900/20 backdrop-blur-sm'
-                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed backdrop-blur-sm'
+                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed rounded-xl backdrop-blur-sm'
                     }`}
             >
                 <div className="absolute inset-0 bg-amber-500/0 group-hover:bg-amber-500/10 transition-colors duration-300" />
@@ -137,7 +137,7 @@ export const HeroActionPanel: React.FC<HeroActionPanelProps> = ({
                 disabled={!isPlayerTurn || blockCooldownTurns > 0}
                 className={`group relative px-4 sm:px-8 py-4 sm:py-6 border rounded-2xl transition-all duration-300 overflow-hidden ${isPlayerTurn && blockCooldownTurns <= 0
                     ? 'bg-gradient-to-br from-blue-900/40 to-blue-950/30 hover:from-blue-900/60 hover:to-blue-900/40 text-slate-100 border-blue-600/30 hover:border-blue-500 shadow-lg shadow-blue-900/20 backdrop-blur-sm'
-                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed backdrop-blur-sm'
+                    : 'bg-slate-900/40 text-slate-600 border-slate-800/50 cursor-not-allowed rounded-xl backdrop-blur-sm'
                     }`}
             >
                 <div className="absolute inset-0 bg-blue-500/0 group-hover:bg-blue-500/10 transition-colors duration-300" />

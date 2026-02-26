@@ -1,6 +1,6 @@
 import { ArrowLeft, Heart, Sword, Shield, Zap, Sparkles } from 'lucide-react';
-import fairyMeetingArt from '../../assets/fairy-meeting.png';
-import gracefulSleepArt from '../../assets/Graceful-sleep.png';
+import fairyMeetingArt from '@/assets/fairy-meeting.png';
+import gracefulSleepArt from '@/assets/Graceful-sleep.png';
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Hero, getHeroesByClass } from '../data/heroes';
@@ -62,6 +62,8 @@ export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundS
     setTimeout(() => onSelectHero(hero), 600);
   };
 
+  const styleImage = getStyleImage();
+
   return (
     <div className="size-full flex items-center justify-center p-4 sm:p-6 overflow-hidden relative">
       {/* Background */}
@@ -71,8 +73,8 @@ export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundS
           <div className="absolute inset-0 opacity-40 blur-sm scale-110" style={{ background: backgroundStyle }} />
         )}
         {/* Style Art Overlay */}
-        {getStyleImage() && (
-          <img src={getStyleImage()} alt="Style Art" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
+        {styleImage && (
+          <img src={styleImage} alt="Style Art" className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
       </div>
@@ -117,8 +119,8 @@ export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundS
                 onMouseEnter={() => setHoveredHero(hero.id)}
                 onMouseLeave={() => setHoveredHero(null)}
                 className={`relative group text-left rounded-3xl transition-all duration-500 overflow-hidden ${isSelected
-                    ? 'ring-2 ring-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]'
-                    : 'hover:shadow-[0_0_30px_rgba(0,0,0,0.5)]'
+                  ? 'ring-2 ring-yellow-500 shadow-[0_0_50px_rgba(234,179,8,0.3)]'
+                  : 'hover:shadow-[0_0_30px_rgba(0,0,0,0.5)]'
                   }`}
               >
                 {/* Card Background */}
@@ -188,8 +190,8 @@ export function HeroSelection({ selectedClass, onSelectHero, onBack, backgroundS
                   {/* Unique Ability */}
                   {hero.uniqueAbility && (
                     <div className={`mt-auto p-4 rounded-xl border transition-all duration-300 ${isSelected
-                        ? 'bg-purple-900/20 border-purple-500/50'
-                        : 'bg-white/5 border-white/5 group-hover:bg-white/10'
+                      ? 'bg-purple-900/20 border-purple-500/50'
+                      : 'bg-white/5 border-white/5 group-hover:bg-white/10'
                       }`}>
                       <div className="flex items-center gap-2 mb-2">
                         <Sparkles className={`w-4 h-4 ${isSelected ? 'text-purple-300' : 'text-purple-400'}`} />
