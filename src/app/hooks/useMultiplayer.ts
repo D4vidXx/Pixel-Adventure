@@ -8,6 +8,7 @@ export interface Player {
 export function useMultiplayer(roomId: string | null, playerName: string) {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
@@ -17,6 +18,7 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
   const connect = useCallback(() => {
     if (!roomId) return;
     setIsConnecting(true);
+    setConnectionError(null);
     
     // Auto-detect secure WebSockets depending on current protocol
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -33,6 +35,7 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
     timeoutRef.current = window.setTimeout(() => {
       if (ws.readyState !== WebSocket.OPEN) {
         console.warn("Multiplayer connection timeout");
+        setConnectionError("Could not reach the multiplayer server. Check that the Cloudflare Worker /api/room route is deployed.");
         setIsConnecting(false);
         if (ws.readyState === WebSocket.CONNECTING) {
           ws.close();
@@ -47,6 +50,7 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
       }
       setIsConnected(true);
       setIsConnecting(false);
+      setConnectionError(null);
     };
 
     ws.onmessage = (event) => {
@@ -74,6 +78,7 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
         timeoutRef.current = null;
       }
       console.error("Multiplayer connection error:", e);
+      setConnectionError("Multiplayer connection failed. The /api/room WebSocket route may not be available on this Cloudflare deployment.");
       setIsConnecting(false);
       setIsConnected(false);
     };
@@ -87,6 +92,9 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
       setIsConnecting(false);
       setRole(null);
       setPlayers([]);
+      if (roomId) {
+        setConnectionError(prev => prev ?? "Multiplayer connection closed before the lobby was created.");
+      }
     };
   }, [roomId, playerName]);
 
@@ -147,6 +155,7 @@ export function useMultiplayer(roomId: string | null, playerName: string) {
     isConnecting,
     role,
     players,
+    connectionError,
     send,
     on,
     disconnect,

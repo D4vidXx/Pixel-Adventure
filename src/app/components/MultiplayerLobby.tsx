@@ -7,6 +7,7 @@ interface MultiplayerLobbyProps {
   onConnect: (roomId: string, name: string) => void;
   isConnected: boolean;
   isConnecting: boolean;
+  connectionError?: string | null;
   roomId: string | null;
   players: Array<{ name: string; role: 'host' | 'guest' }>;
   role: 'host' | 'guest' | null;
@@ -19,6 +20,7 @@ export function MultiplayerLobby({
   onConnect,
   isConnected,
   isConnecting,
+  connectionError,
   roomId,
   players,
   role,
@@ -74,6 +76,12 @@ export function MultiplayerLobby({
         {errorMsg && (
           <div className="mb-4 p-3 bg-red-950/60 border border-red-500/50 rounded-lg text-red-200 text-sm font-semibold z-10 relative text-center">
             ⚠️ {errorMsg}
+          </div>
+        )}
+
+        {connectionError && (
+          <div className="mb-4 p-3 bg-amber-950/60 border border-amber-500/50 rounded-lg text-amber-100 text-sm font-semibold z-10 relative text-center">
+            {connectionError}
           </div>
         )}
 

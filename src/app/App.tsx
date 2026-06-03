@@ -47,6 +47,7 @@ export default function App() {
   const {
     isConnected,
     isConnecting,
+    connectionError,
     role,
     players,
     send,
@@ -492,6 +493,7 @@ export default function App() {
           onConnect={handleMpConnect}
           isConnected={isConnected}
           isConnecting={isConnecting}
+          connectionError={connectionError}
           roomId={mpRoomId}
           players={players}
           role={role}
