@@ -17,6 +17,16 @@ interface CombinedHeroSelectionProps {
   backgroundStyle?: string;
   activeBackgroundId?: string;
   activeStyleId?: string;
+  // Co-op props
+  isMultiplayer?: boolean;
+  role?: 'host' | 'guest' | null;
+  players?: Array<{ name: string; role: 'host' | 'guest' }>;
+  remoteHero?: Hero | null;
+  remoteEquippedItems?: string[];
+  remoteReady?: boolean;
+  isReady?: boolean;
+  onToggleReady?: () => void;
+  onStartGame?: () => void;
 }
 
 type TabType = 'all' | 'warrior' | 'mage' | 'rogue' | 'paladin' | 'gunslinger' | 'duality';
@@ -44,11 +54,31 @@ const StatBar = ({ label, value, max = 10, colorClass, icon: Icon }: any) => (
   </div>
 );
 
-export function CombinedHeroSelection({ onSelectHero, onBack, ownedItems, equippedItems, onToggleEquip, backgroundStyle, activeBackgroundId, activeStyleId }: CombinedHeroSelectionProps) {
+export function CombinedHeroSelection({
+  onSelectHero,
+  onBack,
+  ownedItems,
+  equippedItems,
+  onToggleEquip,
+  backgroundStyle,
+  activeBackgroundId,
+  activeStyleId,
+  isMultiplayer = false,
+  role = null,
+  players = [],
+  remoteHero = null,
+  remoteEquippedItems = [],
+  remoteReady = false,
+  isReady = false,
+  onToggleReady,
+  onStartGame
+}: CombinedHeroSelectionProps) {
   const needsTextBoost = activeBackgroundId === 'anime-skies';
   const [activeTab, setActiveTab] = useState<TabType>('all');
   const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
   const [hoveredHero, setHoveredHero] = useState<string | null>(null);
+
+  console.log('[CombinedHeroSelection] Rendering - role:', role, 'isReady:', isReady, 'remoteReady:', remoteReady, 'selectedHero:', selectedHero?.id || 'null', 'remoteHero:', remoteHero?.id || 'null');
 
   // Get heroes based on active tab
   const getDisplayedHeroes = (): Hero[] => {
@@ -152,6 +182,91 @@ export function CombinedHeroSelection({ onSelectHero, onBack, ownedItems, equipp
             Select your fate and begin the descent
           </p>
         </motion.div>
+
+        {isMultiplayer && (
+          <>
+            <div className="mb-4 bg-slate-900/60 border border-blue-900/40 rounded-2xl p-4 flex flex-col gap-4 backdrop-blur-md">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">Party Status:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-300">{players.length}/2 connected</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+                    <span className="text-xs text-slate-300 uppercase tracking-wide">Host</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
+                    <span className="text-xs text-slate-300 uppercase tracking-wide">Guest</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-slate-950/70 border-2 border-amber-500/30 rounded-3xl p-5 sm:p-6 min-h-[240px] shadow-lg shadow-amber-500/10">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-amber-600 font-bold">👤 You</p>
+                    <p className="text-lg sm:text-xl font-black text-amber-300">{players.find(p => p.role === role)?.name || 'You'}</p>
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold px-3 py-2 rounded-full transition-all ${isReady ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                    {isReady ? '✓ Ready' : '○ Ready?'}
+                  </span>
+                </div>
+                <div className="mb-4">
+                  <p className="text-xs text-amber-600/80 uppercase tracking-wider font-bold mb-2">Selected Hero</p>
+                  <p className="text-xl sm:text-2xl font-black text-amber-100">{selectedHero ? selectedHero.name : '⏳ Choosing...'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-amber-600/80 uppercase tracking-wider font-bold mb-3">Equipped Items</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedHero && equippedItems.length > 0 ? equippedItems.map(itemId => (
+                      <div key={itemId} className="text-[11px] text-amber-200 bg-amber-900/30 px-3 py-1.5 rounded-full border border-amber-600/30 font-semibold">
+                        ⚔️ {getEquipmentItem(itemId)?.name}
+                      </div>
+                    )) : (
+                      <span className="text-xs text-amber-600/60 italic">No items equipped</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className={`rounded-3xl p-5 sm:p-6 min-h-[240px] shadow-lg transition-all ${remoteHero ? 'bg-slate-950/70 border-2 border-blue-500/30 shadow-blue-500/10' : 'bg-slate-900/40 border-2 border-slate-700/30'}`}>
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <p className="text-xs uppercase tracking-widest text-blue-600/80 font-bold">👥 Partner</p>
+                    <p className="text-lg sm:text-xl font-black text-slate-100">{players.find(p => p.role !== role)?.name || 'Waiting...'}</p>
+                  </div>
+                  <span className={`text-[10px] uppercase font-bold px-3 py-2 rounded-full transition-all ${remoteReady ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/50'}`}>
+                    {remoteReady ? '✓ Ready' : '○ Ready?'}
+                  </span>
+                </div>
+                <div className="mb-4">
+                  <p className="text-xs text-slate-500/80 uppercase tracking-wider font-bold mb-2">Selected Hero</p>
+                  <p className="text-xl sm:text-2xl font-black text-blue-200 min-h-[32px] flex items-center">{remoteHero ? remoteHero.name : '⏳ Choosing...'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500/80 uppercase tracking-wider font-bold mb-3">Equipped Items</p>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
+                    {remoteHero && remoteEquippedItems && remoteEquippedItems.length > 0 ? remoteEquippedItems.map(itemId => (
+                      <div key={itemId} className="text-[11px] text-blue-200 bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-600/30 font-semibold">
+                        ⚔️ {getEquipmentItem(itemId)?.name}
+                      </div>
+                    )) : remoteHero ? (
+                      <span className="text-xs text-slate-600/60 italic">No items equipped</span>
+                    ) : (
+                      <span className="text-xs text-slate-600/60 italic">Awaiting selection...</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col lg:flex-row gap-4 sm:gap-6 min-h-0">
@@ -414,21 +529,97 @@ export function CombinedHeroSelection({ onSelectHero, onBack, ownedItems, equipp
             <span className="text-sm font-bold tracking-widest uppercase">Recall to Menu</span>
           </motion.button>
 
-          <motion.button
-            whileHover={selectedHero ? { scale: 1.05, boxShadow: "0 0 30px rgba(234,179,8,0.3)" } : {}}
-            whileTap={selectedHero ? { scale: 0.98 } : {}}
-            onClick={handleConfirm}
-            disabled={!selectedHero}
-            className={`px-6 sm:px-12 py-4 sm:py-5 rounded-2xl transition-all duration-500 flex items-center gap-3 border-2 ${selectedHero
-              ? 'bg-yellow-500/20 border-yellow-500 text-yellow-100 hover:bg-yellow-500/30 shadow-lg'
-              : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-50'
-              }`}
-          >
-            <span className="text-sm sm:text-lg font-black tracking-widest uppercase">
-              {selectedHero ? `Embark as ${selectedHero.name}` : 'Await Selection'}
-            </span>
-            {selectedHero && <motion.div animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}><Sword className="w-5 h-5 text-yellow-500" /></motion.div>}
-          </motion.button>
+          {!isMultiplayer ? (
+            <motion.button
+              whileHover={selectedHero ? { scale: 1.05, boxShadow: "0 0 30px rgba(234,179,8,0.3)" } : {}}
+              whileTap={selectedHero ? { scale: 0.98 } : {}}
+              onClick={handleConfirm}
+              disabled={!selectedHero}
+              className={`px-6 sm:px-12 py-4 sm:py-5 rounded-2xl transition-all duration-500 flex items-center gap-3 border-2 ${selectedHero
+                ? 'bg-yellow-500/20 border-yellow-500 text-yellow-100 hover:bg-yellow-500/30 shadow-lg'
+                : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-50'
+                }`}
+            >
+              <span className="text-sm sm:text-lg font-black tracking-widest uppercase">
+                {selectedHero ? `Embark as ${selectedHero.name}` : 'Await Selection'}
+              </span>
+              {selectedHero && <motion.div animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}><Sword className="w-5 h-5 text-yellow-500" /></motion.div>}
+            </motion.button>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {/* DEBUG: Show status of start game conditions */}
+              {isMultiplayer && (
+                <div className="text-xs text-slate-400 space-y-1 p-3 bg-slate-900/40 rounded-lg border border-slate-700/30">
+                  <div>Role: {role}</div>
+                  <div>Your Ready: {isReady ? '✓' : '✗'}</div>
+                  <div>Remote Ready: {remoteReady ? '✓' : '✗'}</div>
+                  <div>Your Hero: {selectedHero?.name || 'None'}</div>
+                  <div>Remote Hero: {remoteHero?.name || 'None'}</div>
+                  <div className={role === 'host' && isReady && remoteReady && selectedHero && remoteHero ? 'text-emerald-400' : 'text-red-400'}>
+                    {role === 'host' && isReady && remoteReady && selectedHero && remoteHero ? 'Ready to Start!' : 'Waiting...'}
+                  </div>
+                </div>
+              )}
+              
+              {role === 'host' && isReady && remoteReady && selectedHero && remoteHero ? (
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 0 30px rgba(16, 185, 129, 0.3)" }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    console.debug('[UI] host Start clicked');
+                    if (onStartGame) onStartGame();
+                  }}
+                  className="px-6 sm:px-12 py-4 sm:py-5 bg-emerald-500/20 border-2 border-emerald-500 text-emerald-100 hover:bg-emerald-500/30 rounded-2xl font-black tracking-widest uppercase flex items-center gap-3 shadow-lg"
+                >
+                  <span>Start Game</span>
+                  <Sword className="w-5 h-5 text-emerald-400" />
+                </motion.button>
+              ) : (
+                <motion.button
+                  whileHover={selectedHero ? { scale: 1.05 } : {}}
+                  whileTap={selectedHero ? { scale: 0.98 } : {}}
+                  onClick={() => {
+                    try {
+                      console.log('[Ready Button] Clicked - selectedHero:', selectedHero?.id || 'null', 'isReady:', isReady);
+                      if (selectedHero && !isReady) {
+                        // First click: send hero selection before toggling ready
+                        console.log('[Ready Button] Calling onSelectHero with:', selectedHero?.id);
+                        onSelectHero(selectedHero);
+                        // Small delay to ensure hero message is sent before ready toggle
+                        setTimeout(() => {
+                          console.log('[Ready Button] 100ms delay done, calling onToggleReady');
+                          if (onToggleReady) {
+                            onToggleReady();
+                          }
+                        }, 100);
+                      } else {
+                        // Toggle ready on every other click
+                        console.log('[Ready Button] Calling onToggleReady (no hero selection)');
+                        if (onToggleReady) onToggleReady();
+                      }
+                    } catch (error) {
+                      console.error('[Ready Button] Error:', error);
+                    }
+                  }}
+                  disabled={!selectedHero}
+                  className={`px-6 sm:px-12 py-4 sm:py-5 rounded-2xl transition-all duration-500 flex items-center gap-3 border-2 ${selectedHero
+                    ? isReady
+                      ? 'bg-red-500/10 border-red-500/50 text-red-300 hover:bg-red-500/20'
+                      : 'bg-yellow-500/20 border-yellow-500 text-yellow-100 hover:bg-yellow-500/30 shadow-lg'
+                    : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-50'
+                    }`}
+                >
+                  <span className="text-sm sm:text-lg font-black tracking-widest uppercase">
+                    {!selectedHero 
+                      ? 'Choose a Hero' 
+                      : isReady 
+                        ? 'Cancel Ready' 
+                        : 'I am Ready'}
+                  </span>
+                </motion.button>
+              )}
+            </div>
+          )}
         </motion.div>
       </div>
     </div>

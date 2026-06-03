@@ -15,6 +15,7 @@ export interface EquipmentItem {
     onCritGrantRandomStat?: number;
     unavailableClasses?: string[];
     ignoreStatCap?: boolean;
+    isEventExclusive?: boolean;
 }
 
 export const EQUIPMENT_ITEMS: EquipmentItem[] = [
@@ -166,6 +167,28 @@ export const EQUIPMENT_ITEMS: EquipmentItem[] = [
         passiveDescription: 'Lifesteal 8% of damage dealt. Every enemy kill will heal you 10 HP.',
         cost: 200,
         icon: '🔔',
+    },
+    {
+        id: 'bone_smasher',
+        name: 'Bone Smasher',
+        description: '+10 Attack',
+        passiveDescription: 'Increases all damage dealt based on total defense stacks (1% per stack, up to 40%).',
+        cost: 0,
+        icon: '🦴',
+        isEventExclusive: true,
+        flatStats: { attack: 10 },
+        ignoreStatCap: true,
+    },
+    {
+        id: 'boxer_glove',
+        name: 'Boxer Glove',
+        description: '+20 Attack',
+        passiveDescription: 'On equip: permanently reduces the cooldown of your longest CD move by 1. Brawlers instead gain +10 Max Stamina.',
+        cost: 0,
+        icon: '🥊',
+        isEventExclusive: true,
+        flatStats: { attack: 20 },
+        ignoreStatCap: true,
     },
 ];
 

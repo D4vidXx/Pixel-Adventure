@@ -72,98 +72,118 @@ export function DiamondShop({ diamonds, ownedItems, onBuyItem, onBack, backgroun
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-scroll scrollbar-thin scrollbar-thumb-cyan-600 scrollbar-track-slate-900/30">
                     <div className="px-6 py-0 pb-6 space-y-8">
-                {/* Items Grid */}
-                <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.6 }}
-                    className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8"
-                >
-                    {EQUIPMENT_ITEMS.map((item, index) => {
-                        const owned = isOwned(item);
-                        const affordable = canAfford(item);
+                        {/* Items Grid */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.2, duration: 0.6 }}
+                            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8"
+                        >
+                            {EQUIPMENT_ITEMS.map((item, index) => {
+                                const owned = isOwned(item);
+                                const affordable = canAfford(item) && !item.isEventExclusive;
 
-                        return (
-                            <motion.div
-                                key={item.id}
-                                initial={{ y: 20, opacity: 0 }}
-                                animate={{ y: 0, opacity: 1 }}
-                                transition={{ delay: 0.1 * index, duration: 0.5 }}
-                                whileHover={!owned ? { scale: 1.02, y: -2 } : {}}
-                                onClick={() => setSelectedItem(item)}
-                                className={`relative cursor-pointer rounded-2xl border p-5 transition-all duration-300 ${owned
-                                    ? 'bg-green-900/20 border-green-500/30'
-                                    : selectedItem?.id === item.id
-                                        ? 'bg-cyan-900/30 border-cyan-500/50 shadow-lg shadow-cyan-500/10'
-                                        : affordable
-                                            ? 'bg-slate-800/60 border-slate-600/40 hover:border-cyan-500/40'
-                                            : 'bg-slate-900/60 border-slate-700/30 opacity-60'
-                                    }`}
-                            >
-                                {owned && (
-                                    <div className="absolute top-3 right-3">
-                                        <div className="bg-green-500/20 border border-green-500/40 rounded-full p-1">
-                                            <Check className="w-4 h-4 text-green-400" />
+                                return (
+                                    <motion.div
+                                        key={item.id}
+                                        initial={{ y: 20, opacity: 0 }}
+                                        animate={{ y: 0, opacity: 1 }}
+                                        transition={{ delay: 0.1 * index, duration: 0.5 }}
+                                        whileHover={!owned ? { scale: 1.02, y: -2 } : {}}
+                                        onClick={() => setSelectedItem(item)}
+                                        className={`relative cursor-pointer rounded-2xl border p-5 transition-all duration-300 flex flex-col ${owned
+                                            ? 'bg-green-900/20 border-green-500/30'
+                                            : selectedItem?.id === item.id
+                                                ? 'bg-cyan-900/30 border-cyan-500/50 shadow-lg shadow-cyan-500/10'
+                                                : item.isEventExclusive
+                                                    ? 'bg-fuchsia-900/10 border-fuchsia-800/30 hover:border-fuchsia-500/50'
+                                                    : affordable
+                                                        ? 'bg-slate-800/60 border-slate-600/40 hover:border-cyan-500/40'
+                                                        : 'bg-slate-900/60 border-slate-700/30 opacity-60'
+                                            }`}
+                                    >
+                                        {owned && (
+                                            <div className="absolute top-3 right-3">
+                                                <div className="bg-green-500/20 border border-green-500/40 rounded-full p-1">
+                                                    <Check className="w-4 h-4 text-green-400" />
+                                                </div>
+                                            </div>
+                                        )}
+                                        {!owned && !affordable && !item.isEventExclusive && (
+                                            <div className="absolute top-3 right-3">
+                                                <Lock className="w-4 h-4 text-slate-600" />
+                                            </div>
+                                        )}
+                                        {!owned && item.isEventExclusive && (
+                                            <div className="absolute top-3 right-3">
+                                                <Lock className="w-4 h-4 text-fuchsia-500/70" />
+                                            </div>
+                                        )}
+
+                                        <div className="text-3xl mb-3">{item.icon}</div>
+                                        <h3 className={`font-bold text-sm mb-1 ${owned ? 'text-green-300' : 'text-white'}`}>{item.name}</h3>
+                                        <p className="text-[10px] text-slate-400 mb-2">{item.description}</p>
+                                        <p className="text-[10px] text-purple-300/80 italic mb-3">{item.passiveDescription}</p>
+
+                                        <div className="flex-1" />
+                                        {item.isEventExclusive && !owned ? (
+                                            <div className="flex items-center gap-1.5 mt-2">
+                                                <span className="text-[10px] font-bold text-fuchsia-400 uppercase tracking-wider">Event Exclusive</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 mt-2">
+                                                <Diamond className={`w-3.5 h-3.5 ${owned ? 'text-green-400' : affordable ? 'text-cyan-400' : 'text-slate-600'}`} />
+                                                <span className={`text-sm font-bold ${owned ? 'text-green-400 line-through' : affordable ? 'text-cyan-300' : 'text-slate-600'}`}>
+                                                    {item.cost}
+                                                </span>
+                                                {owned && <span className="text-[10px] text-green-400 uppercase tracking-wider ml-1">Owned</span>}
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                );
+                            })}
+                        </motion.div>
+
+                        {/* Selected Item Detail / Buy Button */}
+                        <AnimatePresence mode="wait">
+                            {selectedItem && !isOwned(selectedItem) && (
+                                <motion.div
+                                    key={selectedItem.id}
+                                    initial={{ y: 10, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    exit={{ y: -10, opacity: 0 }}
+                                    className="bg-slate-800/60 border border-slate-600/40 rounded-2xl p-5 mb-6 flex items-center justify-between"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-4xl">{selectedItem.icon}</span>
+                                        <div>
+                                            <h3 className="text-white font-bold text-lg">{selectedItem.name}</h3>
+                                            <p className="text-slate-400 text-xs">{selectedItem.description}</p>
+                                            <p className="text-purple-300 text-xs italic mt-1">{selectedItem.passiveDescription}</p>
                                         </div>
                                     </div>
-                                )}
-                                {!owned && !affordable && (
-                                    <div className="absolute top-3 right-3">
-                                        <Lock className="w-4 h-4 text-slate-600" />
-                                    </div>
-                                )}
-
-                                <div className="text-3xl mb-3">{item.icon}</div>
-                                <h3 className={`font-bold text-sm mb-1 ${owned ? 'text-green-300' : 'text-white'}`}>{item.name}</h3>
-                                <p className="text-[10px] text-slate-400 mb-2">{item.description}</p>
-                                <p className="text-[10px] text-purple-300/80 italic mb-3">{item.passiveDescription}</p>
-
-                                <div className="flex items-center gap-1.5">
-                                    <Diamond className={`w-3.5 h-3.5 ${owned ? 'text-green-400' : affordable ? 'text-cyan-400' : 'text-slate-600'}`} />
-                                    <span className={`text-sm font-bold ${owned ? 'text-green-400 line-through' : affordable ? 'text-cyan-300' : 'text-slate-600'}`}>
-                                        {item.cost}
-                                    </span>
-                                    {owned && <span className="text-[10px] text-green-400 uppercase tracking-wider ml-1">Owned</span>}
-                                </div>
-                            </motion.div>
-                        );
-                    })}
-                </motion.div>
-
-                {/* Selected Item Detail / Buy Button */}
-                <AnimatePresence mode="wait">
-                    {selectedItem && !isOwned(selectedItem) && (
-                        <motion.div
-                            key={selectedItem.id}
-                            initial={{ y: 10, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            exit={{ y: -10, opacity: 0 }}
-                            className="bg-slate-800/60 border border-slate-600/40 rounded-2xl p-5 mb-6 flex items-center justify-between"
-                        >
-                            <div className="flex items-center gap-4">
-                                <span className="text-4xl">{selectedItem.icon}</span>
-                                <div>
-                                    <h3 className="text-white font-bold text-lg">{selectedItem.name}</h3>
-                                    <p className="text-slate-400 text-xs">{selectedItem.description}</p>
-                                    <p className="text-purple-300 text-xs italic mt-1">{selectedItem.passiveDescription}</p>
-                                </div>
-                            </div>
-                            <motion.button
-                                whileHover={canAfford(selectedItem) ? { scale: 1.05 } : {}}
-                                whileTap={canAfford(selectedItem) ? { scale: 0.95 } : {}}
-                                onClick={() => handleBuy(selectedItem)}
-                                disabled={!canAfford(selectedItem)}
-                                className={`px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-sm flex items-center gap-2 transition-all ${canAfford(selectedItem)
-                                    ? 'bg-cyan-600/30 border border-cyan-500 text-cyan-100 hover:bg-cyan-600/50 shadow-lg shadow-cyan-500/20'
-                                    : 'bg-slate-700/30 border border-slate-600 text-slate-500 cursor-not-allowed'
-                                    }`}
-                            >
-                                <Diamond className="w-4 h-4" />
-                                Buy for {selectedItem.cost}
-                            </motion.button>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                    {selectedItem.isEventExclusive ? (
+                                        <div className="px-6 py-3 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 bg-fuchsia-900/30 border border-fuchsia-500/40 text-fuchsia-300">
+                                            Obtainable Through Event
+                                        </div>
+                                    ) : (
+                                        <motion.button
+                                            whileHover={canAfford(selectedItem) ? { scale: 1.05 } : {}}
+                                            whileTap={canAfford(selectedItem) ? { scale: 0.95 } : {}}
+                                            onClick={() => handleBuy(selectedItem)}
+                                            disabled={!canAfford(selectedItem)}
+                                            className={`px-8 py-3 rounded-xl font-bold uppercase tracking-wider text-sm flex items-center gap-2 transition-all ${canAfford(selectedItem)
+                                                ? 'bg-cyan-600/30 border border-cyan-500 text-cyan-100 hover:bg-cyan-600/50 shadow-lg shadow-cyan-500/20'
+                                                : 'bg-slate-700/30 border border-slate-600 text-slate-500 cursor-not-allowed'
+                                                }`}
+                                        >
+                                            <Diamond className="w-4 h-4" />
+                                            Buy for {selectedItem.cost}
+                                        </motion.button>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
 
@@ -185,7 +205,7 @@ export function DiamondShop({ diamonds, ownedItems, onBuyItem, onBack, backgroun
                     </motion.button>
 
                     <p className="text-slate-600 text-[10px] tracking-widest uppercase">
-                        {ownedItems.length} / {EQUIPMENT_ITEMS.length} Items Owned
+                        {ownedItems.filter(id => !EQUIPMENT_ITEMS.find(e => e.id === id)?.isEventExclusive).length} / {EQUIPMENT_ITEMS.filter(item => !item.isEventExclusive).length} Standard Items Owned
                     </p>
                 </motion.div>
             </div>

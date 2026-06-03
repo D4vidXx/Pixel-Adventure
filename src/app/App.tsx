@@ -9,22 +9,125 @@ import { StyleGacha } from './components/StyleGacha';
 import { AuroraShootingStar } from './components/AuroraShootingStar';
 import { Game } from './components/Game';
 import { ParticleBackground } from './components/ParticleBackground';
-import { Hero } from './data/heroes';
+import { EventsMenu } from './components/EventsMenu';
+import { FightClubNameScreen } from './components/FightClubNameScreen';
+import { FightClubIntroScreen } from './components/FightClubIntroScreen';
+import { FightClubGame } from './components/FightClubGame';
+import { Hero, ALL_HEROES } from './data/heroes';
 import { EQUIPMENT_ITEMS } from './data/equipment-items';
 import { BACKGROUND_OPTIONS, DEFAULT_BACKGROUND_ID, getBackgroundById } from './data/backgrounds';
 import { BASE_STYLE_IDS, GACHA_STYLE_ID, FAIRY_GACHA_STYLE_ID } from './data/styles';
 import { Difficulty } from './data/difficulty';
+import { useMultiplayer } from './hooks/useMultiplayer';
+import { MultiplayerLobby } from './components/MultiplayerLobby';
 
 export default function App() {
   // Music audio ref
   const menuMusicRef = useRef<HTMLAudioElement>(null);
   const [currentMenuSong, setCurrentMenuSong] = useState<0 | 1>(0);
   const defaultStyleId = 'pirate';
-  const [gameState, setGameState] = useState<'menu' | 'heroSelection' | 'playing' | 'settings' | 'diamondShop' | 'backgroundShop' | 'styleGacha'>('menu');
+  const [gameState, setGameState] = useState<'menu' | 'heroSelection' | 'playing' | 'settings' | 'diamondShop' | 'backgroundShop' | 'styleGacha' | 'events_menu' | 'fightClubName' | 'fightClubIntro' | 'fightClub' | 'multiplayerLobby'>('menu');
+  const [gameMode, setGameMode] = useState<'normal' | 'event_goblin_ambush' | 'event_fight_club'>('normal');
+  const [fighterName, setFighterName] = useState('');
   const [currentGachaStyleId, setCurrentGachaStyleId] = useState<string>('anime-prism');
   const [currentGachaType, setCurrentGachaType] = useState<'main' | 'fairy'>('main');
   const [selectedHero, setSelectedHero] = useState<Hero | null>(null);
-  const [equippedItems, setEquippedItems] = useState<string[]>([]);
+
+  // Multiplayer Room States
+  const [isMultiplayer, setIsMultiplayer] = useState(false);
+  const [mpRoomId, setMpRoomId] = useState<string | null>(null);
+  const [mpPlayerName, setMpPlayerName] = useState('');
+  const [remoteHero, setRemoteHero] = useState<Hero | null>(null);
+  const [remoteEquippedItems, setRemoteEquippedItems] = useState<string[]>([]);
+  const [remoteReady, setRemoteReady] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [pendingStart, setPendingStart] = useState(false);
+
+  // Connection management
+  const {
+    isConnected,
+    isConnecting,
+    role,
+    players,
+    send,
+    on,
+    disconnect
+  } = useMultiplayer(mpRoomId, mpPlayerName);
+
+  // Synchronize co-op events in hero selection
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const unsubs = [
+      on("proceed_to_heroes", () => {
+        setGameState("heroSelection");
+      }),
+
+      on("select_hero", (data) => {
+        console.debug('[MP] select_hero received', data);
+        const hero = ALL_HEROES.find(h => h.id === data.heroId) || null;
+        setRemoteHero(hero);
+        setRemoteEquippedItems(data.equippedItems || []);
+      }),
+
+      on("toggle_ready", (data) => {
+        console.debug('[MP] toggle_ready received', data);
+        setRemoteReady(data.isReady);
+      }),
+
+      on("start_game", () => {
+        console.debug('[MP] start_game received - selectedHero:', selectedHero?.id || 'null', 'remoteHero:', remoteHero?.id || 'null', 'remoteHero obj:', remoteHero);
+        // If either side hasn't selected a hero yet, mark pending and wait for both selections.
+        if (isMultiplayer && (!selectedHero || !remoteHero)) {
+          console.warn('start_game received but hero(s) missing, deferring start', {selectedHero: !!selectedHero, remoteHero: !!remoteHero});
+          setPendingStart(true);
+          // stay on heroSelection until both heroes present
+          setGameState("heroSelection");
+          return;
+        }
+        console.log('[DEBUG] start_game: Both heroes present, transitioning to playing');
+        setPendingStart(false);
+        setGameState("playing");
+      }),
+
+      on("player_left", () => {
+        setRemoteHero(null);
+        setRemoteEquippedItems([]);
+        setRemoteReady(false);
+        setIsReady(false);
+      })
+    ];
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [isConnected, on, isMultiplayer, selectedHero]);
+
+  // If a start was requested but one or both heroes were missing, start when both are available
+  useEffect(() => {
+    if (!pendingStart) return;
+    if (selectedHero && remoteHero) {
+      setPendingStart(false);
+      setGameState('playing');
+    }
+    // Cancel pending start after 8s to avoid indefinite wait
+    const t = setTimeout(() => {
+      if (pendingStart) {
+        console.warn('Pending multiplayer start timed out');
+        setPendingStart(false);
+      }
+    }, 8000);
+    return () => clearTimeout(t);
+  }, [pendingStart, selectedHero, remoteHero]);
+
+  const [equippedItems, setEquippedItems] = useState<string[]>(() => {
+    const saved = localStorage.getItem('pixelAdventure_equippedItems');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return parsed.filter((id: string) => id !== 'bone_smasher'); // Ensure it's not equipped either
+    }
+    return [];
+  });
 
   // Persistent state from localStorage
   const [diamonds, setDiamonds] = useState<number>(() => {
@@ -34,7 +137,12 @@ export default function App() {
 
   const [ownedItems, setOwnedItems] = useState<string[]>(() => {
     const saved = localStorage.getItem('pixelAdventure_ownedItems');
-    return saved ? JSON.parse(saved) : [];
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Remove bone_smasher if they got it from the shop glitch earlier
+      return parsed.filter((id: string) => id !== 'bone_smasher');
+    }
+    return [];
   });
 
   const [ownedBackgrounds, setOwnedBackgrounds] = useState<string[]>(() => {
@@ -143,6 +251,10 @@ export default function App() {
   }, [activeStyleId]);
 
   useEffect(() => {
+    localStorage.setItem('pixelAdventure_equippedItems', JSON.stringify(equippedItems));
+  }, [equippedItems]);
+
+  useEffect(() => {
     localStorage.setItem('pixelAdventure_difficulty', difficulty);
   }, [difficulty]);
 
@@ -170,6 +282,73 @@ export default function App() {
   }, []);
 
   const handlePlay = () => {
+    setIsMultiplayer(false);
+    setGameMode('normal');
+    setEquippedItems([]);
+    setGameState('heroSelection');
+  };
+
+  const handleCoop = () => {
+    setIsMultiplayer(true);
+    setGameMode('normal');
+    setEquippedItems([]);
+    setGameState('multiplayerLobby');
+  };
+
+  const handleMpConnect = (roomId: string, name: string) => {
+    setMpPlayerName(name);
+    setMpRoomId(roomId);
+  };
+
+  const handleMpProceedToHeroes = () => {
+    // Host broadcasts to guest to go to hero selection
+    send('proceed_to_heroes', {});
+    setGameState('heroSelection');
+  };
+
+  // Called when local player selects their hero in co-op
+  const handleHeroSelectMP = (hero: Hero) => {
+    if (!hero || !hero.id) {
+      console.error('Invalid hero selection:', hero);
+      return;
+    }
+    setSelectedHero(hero);
+    send('select_hero', { heroId: hero.id, equippedItems });
+  };
+
+  // Called when local player toggles ready in co-op
+  const handleToggleReadyMP = () => {
+    try {
+      const next = !isReady;
+      console.log('[handleToggleReadyMP] Toggling ready from', isReady, 'to', next);
+      setIsReady(next);
+      console.log('[handleToggleReadyMP] Sending toggle_ready message with:', { isReady: next });
+      send('toggle_ready', { isReady: next });
+      console.log('[handleToggleReadyMP] Done');
+    } catch (error) {
+      console.error('[handleToggleReadyMP] Error:', error);
+    }
+  };
+
+  // Called by the host to start the game when both are ready
+  const handleStartGameMP = () => {
+    if (role !== 'host') return; // Only host can initiate game start
+    send('start_game', {});
+    setGameState('playing');
+  };
+
+  const handleEvents = () => {
+    setGameState('events_menu');
+  };
+
+  const handleStartEvent = (eventId: 'event_goblin_ambush' | 'event_fight_club') => {
+    if (eventId === 'event_fight_club') {
+      setGameMode('event_fight_club');
+      setEquippedItems([]);
+      setGameState('fightClubName');
+      return;
+    }
+    setGameMode(eventId);
     setEquippedItems([]);
     setGameState('heroSelection');
   };
@@ -187,6 +366,16 @@ export default function App() {
     setGameState('menu');
     setSelectedHero(null);
     setEquippedItems([]);
+    // Clean up multiplayer state
+    if (isMultiplayer) {
+      disconnect();
+      setMpRoomId(null);
+      setIsMultiplayer(false);
+      setRemoteHero(null);
+      setRemoteEquippedItems([]);
+      setRemoteReady(false);
+      setIsReady(false);
+    }
   };
 
   const handleOpenShop = () => {
@@ -281,6 +470,8 @@ export default function App() {
       {gameState === 'menu' && (
         <MainMenu
           onPlay={handlePlay}
+          onCoop={handleCoop}
+          onEvents={handleEvents}
           onSettings={handleSettings}
           onShop={handleOpenShop}
           onBackgroundShop={handleOpenBackgroundShop}
@@ -293,6 +484,19 @@ export default function App() {
           ownedStyles={ownedStyles}
           difficulty={difficulty}
           onDifficultyChange={setDifficulty}
+        />
+      )}
+      {gameState === 'multiplayerLobby' && (
+        <MultiplayerLobby
+          onBack={handleBackToMenu}
+          onConnect={handleMpConnect}
+          isConnected={isConnected}
+          isConnecting={isConnecting}
+          roomId={mpRoomId}
+          players={players}
+          role={role}
+          onProceedToHeroSelection={handleMpProceedToHeroes}
+          backgroundStyle={activeBackground.style}
         />
       )}
       {gameState === 'diamondShop' && (
@@ -334,7 +538,7 @@ export default function App() {
       )}
       {gameState === 'heroSelection' && (
         <CombinedHeroSelection
-          onSelectHero={handleHeroSelect}
+          onSelectHero={isMultiplayer ? handleHeroSelectMP : handleHeroSelect}
           onBack={handleBackToMenu}
           ownedItems={ownedItems}
           equippedItems={equippedItems}
@@ -342,18 +546,72 @@ export default function App() {
           backgroundStyle={activeBackground.style}
           activeBackgroundId={activeBackgroundId}
           activeStyleId={activeStyleId}
+          isMultiplayer={isMultiplayer}
+          role={role}
+          players={players}
+          remoteHero={remoteHero}
+          remoteEquippedItems={remoteEquippedItems}
+          remoteReady={remoteReady}
+          isReady={isReady}
+          onToggleReady={handleToggleReadyMP}
+          onStartGame={handleStartGameMP}
         />
       )}
-      {gameState === 'playing' && selectedHero && (
+      {gameState === 'playing' && (selectedHero || (isMultiplayer && remoteHero)) && (
         <Game
-          hero={selectedHero}
+          hero={selectedHero || remoteHero}
           onBackToMenu={handleBackToMenu}
           equippedItems={equippedItems}
           ownedItems={ownedItems}
+          onEquipmentUnlocked={(id: string) => {
+            if (!ownedItems.includes(id)) {
+              setOwnedItems(prev => [...prev, id]);
+            }
+          }}
           onDiamondsEarned={handleDiamondsEarned}
           activeStyleId={activeStyleId}
           activeBackgroundId={activeBackgroundId}
           difficulty={difficulty}
+          gameMode={gameMode}
+          // Co-op props (passed through for future rendering)
+          isMultiplayer={isMultiplayer}
+          multiplayerRole={role}
+          remoteHero={remoteHero}
+          remoteEquippedItems={remoteEquippedItems}
+          multiplayerSend={isMultiplayer ? send : undefined}
+          multiplayerOn={isMultiplayer ? on : undefined}
+        />
+      )}
+      {gameState === 'events_menu' && (
+        <EventsMenu
+          onStartEvent={handleStartEvent}
+          onBack={handleBackToMenu}
+          ownedItems={ownedItems}
+          diamonds={diamonds}
+        />
+      )}
+      {gameState === 'fightClubName' && (
+        <FightClubNameScreen
+          onConfirm={(name) => { setFighterName(name); setGameState('fightClubIntro'); }}
+          onBack={() => setGameState('events_menu')}
+        />
+      )}
+      {gameState === 'fightClubIntro' && (
+        <FightClubIntroScreen
+          fighterName={fighterName}
+          onComplete={() => setGameState('fightClub')}
+        />
+      )}
+      {gameState === 'fightClub' && (
+        <FightClubGame
+          fighterName={fighterName}
+          onVictory={() => {
+            if (!ownedItems.includes('boxer_glove')) {
+              setOwnedItems(prev => [...prev, 'boxer_glove']);
+            }
+            setGameState('events_menu');
+          }}
+          onDefeat={() => setGameState('events_menu')}
         />
       )}
       {gameState === 'settings' && (

@@ -1,7 +1,7 @@
 import { Heart, Shield, Sword, Package, ArrowLeft, Zap, Coins, Target, Sparkles, Moon, Music, Swords } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from './ui/tooltip';
 import { ARTIFACT_DESCRIPTIONS, DEBUFF_DESCRIPTIONS } from './data/artifact-descriptions';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import animeStyleArt from '../../assets/anime-style-gacha.png';
 import mountainStyleArt from '../../assets/serene-japanese-mountainscape.png';
@@ -11,13 +11,17 @@ import gracefulSleepArt from '../../assets/Graceful-sleep.png';
 import { Move } from './MoveSelection';
 import { MoveSelection } from './MoveSelection';
 import { RhythmGame } from './RhythmGame';
-import { ItemSelection, Item } from './ItemSelection';
+import { ItemSelection, Item, ITEM_TYPES } from './ItemSelection';
 import { RewardScreen, LootItem, LOOT_ITEMS } from './RewardScreen';
 import { Shop } from './Shop';
 import { RestScreen } from './RestScreen';
 import { InterludeScreen } from './InterludeScreen';
+import { EventInterludeScreen } from './EventInterludeScreen';
+import { EventChestScreen, EventReward } from './EventChestScreen';
+import { EventVictoryScreen } from './EventVictoryScreen';
+import { EventIntroScreen } from './EventIntroScreen';
 import { StageBackground } from './StageBackground';
-import { STAGE_1_LEVELS, STAGE_2_LEVELS, STAGE_3_LEVELS, STAGE_4_LEVELS, Enemy, getEnemyEmoji } from './EnemyData';
+import { STAGE_1_LEVELS, STAGE_2_LEVELS, STAGE_3_LEVELS, STAGE_4_LEVELS, Enemy, getEnemyEmoji, EVENT_GOBLIN_AMBUSH } from './EnemyData';
 import { EnemyDisplay } from './EnemyDisplay';
 import { getSpecialMovePrice, SPECIAL_MOVES } from './MoveShop';
 import {
@@ -52,9 +56,170 @@ interface GameProps {
   activeStyleId?: string;
   activeBackgroundId?: string;
   difficulty: Difficulty;
+  gameMode?: 'normal' | 'event_goblin_ambush' | 'event_fight_club';
+  onEquipmentUnlocked?: (id: string) => void;
+  // Co-op multiplayer props (optional — unused in solo)
+  isMultiplayer?: boolean;
+  multiplayerRole?: 'host' | 'guest' | null;
+  remoteHero?: import('../data/heroes').Hero | null;
+  remoteEquippedItems?: string[];
+  multiplayerSend?: (type: string, payload?: any) => void;
+  multiplayerOn?: (type: string, callback: (data: any) => void) => () => void;
 }
 
-export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], onDiamondsEarned, activeStyleId, activeBackgroundId, difficulty }: GameProps) {
+type CoopTurnPhase = 'host' | 'guest' | 'enemies';
+
+const getCoopHeroMaxResource = (coopHero?: Hero | null, itemIds: string[] = []) => {
+  if (!coopHero) return 0;
+  if (coopHero.classId === 'gunslinger') return 8;
+  if (coopHero.classId === 'brawler') {
+    return (coopHero.id === 'jj_smith' ? 50 : 60) + (itemIds.includes('boxer_glove') ? 10 : 0);
+  }
+  return 100;
+};
+
+const getCoopHeroStartingResource = (coopHero?: Hero | null, itemIds: string[] = []) => {
+  if (!coopHero || coopHero.id === 'clyde') return 0;
+  return (coopHero.stats as any).maxResource ?? getCoopHeroMaxResource(coopHero, itemIds);
+};
+
+const getCoopHeroMaxHealth = (coopHero?: Hero | null, itemIds: string[] = []) => {
+  if (!coopHero) return 0;
+  return coopHero.stats.health + itemIds.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.health || 0), 0);
+};
+
+const getCoopHeroDisplayStats = (coopHero?: Hero | null, itemIds: string[] = []) => {
+  if (!coopHero) return { attack: 0, defense: 0, speed: 0 };
+  return {
+    attack: coopHero.stats.attack + itemIds.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.attack || 0), 0),
+    defense: coopHero.stats.defense + itemIds.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.defense || 0), 0),
+    speed: coopHero.stats.speed + itemIds.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.speed || 0), 0),
+  };
+};
+
+export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], onDiamondsEarned, activeStyleId, activeBackgroundId, difficulty, gameMode = 'normal', onEquipmentUnlocked, isMultiplayer = false, multiplayerRole = null, remoteHero = null, remoteEquippedItems = [], multiplayerSend, multiplayerOn }: GameProps) {
+  console.log('[Game] Rendering with hero:', hero?.id || 'null', 'remoteHero:', remoteHero?.id || 'null', 'isMultiplayer:', isMultiplayer);
+  
+  // Defensive: if `hero` is missing (race condition from multiplayer start), render a safe fallback
+  if (!hero) {
+    console.warn('[Game] hero is falsy/null, showing fallback');
+    return (
+      <div className="size-full flex items-center justify-center bg-slate-900">
+        <div className="bg-slate-800/90 text-white p-6 rounded-2xl border border-slate-700">
+          <h2 className="text-xl font-bold mb-2">Waiting for hero selection</h2>
+          <p className="text-sm text-slate-300 mb-4">The game is waiting for both players to have a selected hero. Please wait a moment or return to lobby.</p>
+          <div className="flex gap-3 justify-end">
+            <button onClick={onBackToMenu} className="px-4 py-2 bg-slate-700/60 rounded-md text-sm">Back to Lobby</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // Multiplayer: determine if this player is the game host (authority)
+  const localCoopRole: 'host' | 'guest' = multiplayerRole === 'guest' ? 'guest' : 'host';
+  const isGameHost = isMultiplayer && localCoopRole === 'host';
+  
+  // CRITICAL: Declare ALL state BEFORE any useCallbacks/useEffects that reference them
+  const [currentActiveTurn, setCurrentActiveTurn] = useState<CoopTurnPhase>('host');
+  const [currentStage, setCurrentStage] = useState(1);
+  const [currentLevel, setCurrentLevel] = useState(1);
+  const [turnCount, setTurnCount] = useState(0);
+  const [gold, setGold] = useState(0); // Will be set to startingGold after equipments are loaded
+  const [combatLog, setCombatLog] = useState<string[]>([]);
+  const [enemies, setEnemies] = useState<any[]>([]);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  
+  // Player stats (base values, equipment bonuses applied via useEffect)
+  const [playerHealth, setPlayerHealth] = useState(hero.stats.health);
+  const [playerAttack, setPlayerAttack] = useState(hero.stats.attack);
+  const [playerDefense, setPlayerDefense] = useState(hero.stats.defense);
+  const [playerResource, setPlayerResource] = useState(() => getCoopHeroStartingResource(hero, equippedItems));
+  const [remotePlayerHealth, setRemotePlayerHealth] = useState(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+  const [remoteMaxPlayerHealth, setRemoteMaxPlayerHealth] = useState(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+  const [remotePlayerResource, setRemotePlayerResource] = useState(() => getCoopHeroStartingResource(remoteHero, remoteEquippedItems));
+  const [remotePlayerAttack, setRemotePlayerAttack] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).attack);
+  const [remotePlayerDefense, setRemotePlayerDefense] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).defense);
+  const [remotePlayerSpeed, setRemotePlayerSpeed] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).speed);
+  const [lastEnemyTarget, setLastEnemyTarget] = useState<'local' | 'remote' | null>(null);
+  const [showCoopProgressGate, setShowCoopProgressGate] = useState(false);
+  const [coopProgressLabel, setCoopProgressLabel] = useState('Continue');
+  const [coopProgressReady, setCoopProgressReady] = useState(false);
+  const [remoteCoopProgressReady, setRemoteCoopProgressReady] = useState(false);
+  
+  const gameStateRef = useRef<any>(null);
+  const pendingCoopProgressionRef = useRef<(() => void) | null>(null);
+  const displayedVictoryKeyRef = useRef<string | null>(null);
+  const receivingStageEventRef = useRef(false);
+  
+  // Serialize critical game state for syncing
+  const getGameStateSnapshot = useCallback((state: any) => ({
+    currentStage: state.currentStage,
+    currentLevel: state.currentLevel,
+    playerHealth: state.playerHealth,
+    playerAttack: state.playerAttack,
+    playerDefense: state.playerDefense,
+    playerResource: state.playerResource,
+    maxPlayerResource: state.maxPlayerResource,
+    enemies: state.enemies.map((e: any) => ({
+      id: e.id,
+      name: e.name,
+      health: e.health,
+      maxHealth: e.maxHealth,
+      type: e.type,
+    })),
+    combatLog: state.combatLog.slice(-20), // Last 20 log entries
+    isPlayerTurn: state.isPlayerTurn,
+    gold: state.gold,
+    turnCount: state.turnCount,
+    selectedTargetId: state.selectedTargetId,
+    currentActiveTurn: state.currentActiveTurn, // Whose turn in multiplayer (host/guest)
+  }), []);
+  
+  // Broadcast game state from host
+  const broadcastGameState = useCallback((stateSnapshot: any) => {
+    if (!isGameHost || !multiplayerSend) return;
+    multiplayerSend('game_state_update', stateSnapshot);
+  }, [isGameHost, multiplayerSend]);
+
+  // Listen for game state updates on guest side
+  useEffect(() => {
+    if (isGameHost || !multiplayerOn) return;
+    
+    const unsubscribe = multiplayerOn('game_state_update', (data: any) => {
+      gameStateRef.current = data;
+      // Apply currentActiveTurn from host
+      if (data.currentActiveTurn) {
+        setCurrentActiveTurn(data.currentActiveTurn);
+      }
+      console.log('[Multiplayer Guest] Synced game state:', data);
+    });
+    
+    return unsubscribe;
+  }, [isGameHost, multiplayerOn]);
+
+  // Helper: Check if current player can take an action in multiplayer
+  const canTakeAction = useCallback(() => {
+    if (!isMultiplayer) return true;
+    // In multiplayer, only allow actions if it's this player's turn
+    return currentActiveTurn === localCoopRole;
+  }, [isMultiplayer, currentActiveTurn, localCoopRole]);
+
+  const setCoopTurnPhase = useCallback((nextTurn: CoopTurnPhase) => {
+    setCurrentActiveTurn(nextTurn);
+    if (multiplayerSend) {
+      multiplayerSend('turn_switch', { currentActiveTurn: nextTurn });
+      console.log('[Co-op] Broadcasting turn switch to:', nextTurn);
+    }
+  }, [multiplayerSend]);
+
+  // Helper: Switch turn to the other player in multiplayer and broadcast it
+  const switchTurn = useCallback(() => {
+    if (!isMultiplayer) return;
+    const nextTurn: CoopTurnPhase = currentActiveTurn === 'host' ? 'guest' : 'host';
+    setCoopTurnPhase(nextTurn);
+  }, [isMultiplayer, currentActiveTurn, setCoopTurnPhase]);
+
   const getStyleImage = () => {
     switch (activeStyleId) {
       case 'anime-prism':
@@ -76,6 +241,40 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   useEffect(() => {
     setRunEquippedItems(equippedItems);
   }, [equippedItems]);
+
+  useEffect(() => {
+    const remoteStats = getCoopHeroDisplayStats(remoteHero, remoteEquippedItems);
+    setRemotePlayerHealth(getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+    setRemoteMaxPlayerHealth(getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+    setRemotePlayerResource(getCoopHeroStartingResource(remoteHero, remoteEquippedItems));
+    setRemotePlayerAttack(remoteStats.attack);
+    setRemotePlayerDefense(remoteStats.defense);
+    setRemotePlayerSpeed(remoteStats.speed);
+  }, [remoteHero?.id, remoteHero?.stats.health, remoteEquippedItems]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+    return multiplayerOn('player_status_update', (data: any) => {
+      if (typeof data.health === 'number') {
+        setRemotePlayerHealth(data.health);
+      }
+      if (typeof data.maxHealth === 'number') {
+        setRemoteMaxPlayerHealth(data.maxHealth);
+      }
+      if (typeof data.resource === 'number') {
+        setRemotePlayerResource(data.resource);
+      }
+      if (typeof data.attack === 'number') {
+        setRemotePlayerAttack(data.attack);
+      }
+      if (typeof data.defense === 'number') {
+        setRemotePlayerDefense(data.defense);
+      }
+      if (typeof data.speed === 'number') {
+        setRemotePlayerSpeed(data.speed);
+      }
+    });
+  }, [isMultiplayer, multiplayerOn]);
 
   const hasEquipment = (itemId: string) => runEquippedItems.includes(itemId);
 
@@ -118,12 +317,23 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     };
   }, [maybeApplyBeerBoost]);
   const startingGold = hasEquipment('chinese_waving_cat') ? 100 : 0;
-  const [currentStage, setCurrentStage] = useState(1);
-  const [currentLevel, setCurrentLevel] = useState(1);
+
+  // Initialize gold and apply equipment bonuses when equipment changes
+  useEffect(() => {
+    setGold(startingGold);
+    const equipHealthBonus = runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.health || 0), 0);
+    setPlayerHealth(hero.stats.health + equipHealthBonus);
+    const equipAttackBonus = hero.id === 'clyde' ? 0 : runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.attack || 0), 0);
+    setPlayerAttack(hero.stats.attack + equipAttackBonus);
+    const equipDefenseBonus = runEquippedItems.reduce((sum, id) => {
+      if (id === 'crab_claws') return sum;
+      return sum + (getEquipmentItem(id)?.flatStats?.defense || 0);
+    }, 0);
+    setPlayerDefense(hero.stats.defense + equipDefenseBonus);
+  }, []);
 
   // Dev Cheat Buffer
   const [cheatBuffer, setCheatBuffer] = useState('');
-  const [turnCount, setTurnCount] = useState(0);
   // Calculate flat stat bonuses from equipped items
   // Clyde cannot get attack bonuses from items
   const equipAttackBonus = hero.id === 'clyde' ? 0 : runEquippedItems.reduce((sum, id) => sum + (getEquipmentItem(id)?.flatStats?.attack || 0), 0);
@@ -173,7 +383,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     equipBonusRef.current = next;
   }, [equipAttackBonus, equipDefenseBonus, equipHealthBonus, hero.id, hero.stats.health, permanentUpgrades.healthBonus]);
 
-  const [playerHealth, setPlayerHealth] = useState(hero.stats.health + equipHealthBonus);
   const [playerShield, setPlayerShield] = useState(0);
 
   // Brawler Class Mechanics
@@ -204,15 +413,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [playerBurnTurns, setPlayerBurnTurns] = useState(0);
   const [fireTornadoTurns, setFireTornadoTurns] = useState(0);
   const [playerSpeedDebuffTurns, setPlayerSpeedDebuffTurns] = useState(0);
-  const [playerAttack, setPlayerAttack] = useState(hero.stats.attack + equipAttackBonus);
-  const [playerDefense, setPlayerDefense] = useState(hero.stats.defense + equipDefenseBonus);
-  const maxBrawlerStamina = hero.id === 'jj_smith' ? 50 : 60; // JJ has 50, Bruno & Feyland share 60
+  const maxBrawlerStamina = (hero.id === 'jj_smith' ? 50 : 60) + (equippedItems.includes('boxer_glove') ? 10 : 0); // JJ has 50, Bruno & Feyland share 60; Boxer Glove adds +10
   const maxPlayerResource = hero.classId === 'gunslinger' ? 8 : (hero.classId === 'brawler' ? maxBrawlerStamina : 100);
-  const [playerResource, setPlayerResource] = useState(() => {
-    if (hero.classId === 'gunslinger') return 8; // Max bullets
-    if (hero.classId === 'brawler') return maxBrawlerStamina; // Max Stamina
-    return 100; // Mana, Energy, or Bullets
-  });
+  const remoteMaxPlayerResource = getCoopHeroMaxResource(remoteHero, remoteEquippedItems);
+  const remoteResourceType = remoteHero?.resourceType ?? 'Resource';
+  const partyEnemyScale = isMultiplayer && remoteHero ? 2 : 1;
   const [lucianSoulMeter, setLucianSoulMeter] = useState(0); // Lucian's Soul Meter (0-5000)
   const [permafrostIceActive, setPermafrostIceActive] = useState(hero.id === 'meryn'); // Meryn's passive - ice shield
   const permafrostIceActiveRef = useRef(hero.id === 'meryn');
@@ -235,6 +440,124 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   useEffect(() => { playerShieldRef.current = playerShield; }, [playerShield]);
   useEffect(() => { permafrostIceActiveRef.current = permafrostIceActive; }, [permafrostIceActive]);
 
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+    return multiplayerOn('coop_damage_player', (data: any) => {
+      if (data.targetRole !== localCoopRole || typeof data.damage !== 'number') return;
+
+      setLastEnemyTarget('local');
+      setPlayerHealth(prevHealth => {
+        const newHealth = Math.max(0, prevHealth - data.damage);
+        playerHealthRef.current = newHealth;
+        return newHealth;
+      });
+    });
+  }, [isMultiplayer, multiplayerOn, localCoopRole]);
+
+  // Host: Periodically broadcast game state to all guests
+  useEffect(() => {
+    if (!isGameHost || !multiplayerSend) return;
+    
+    const syncInterval = setInterval(() => {
+      const snapshot = getGameStateSnapshot({
+        currentStage,
+        currentLevel,
+        playerHealth,
+        playerAttack,
+        playerDefense,
+        playerResource,
+        maxPlayerResource,
+        enemies,
+        combatLog,
+        isPlayerTurn,
+        gold,
+        turnCount,
+        selectedTargetId,
+        currentActiveTurn,
+      });
+      broadcastGameState(snapshot);
+    }, 500); // Sync every 500ms
+    
+    return () => clearInterval(syncInterval);
+  }, [isGameHost, multiplayerSend, currentStage, currentLevel, playerHealth, playerAttack, playerDefense, playerResource, enemies, combatLog, isPlayerTurn, gold, turnCount, selectedTargetId, currentActiveTurn, getGameStateSnapshot, broadcastGameState]);
+
+  // Listen for turn_switch messages from opponent
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+
+    const unsubscribe = multiplayerOn('turn_switch', (data: any) => {
+      console.log('[Co-op] Received turn switch:', data);
+      setCurrentActiveTurn(data.currentActiveTurn);
+      // It's our turn now if the incoming turn matches our role
+      const isMyTurn = data.currentActiveTurn === localCoopRole;
+      setIsPlayerTurn(isMyTurn);
+    });
+
+    return unsubscribe;
+  }, [isMultiplayer, multiplayerOn, localCoopRole]);
+
+  // Guest: Listen for co-op player_action broadcasts from the other player
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+
+    const unsubscribe = multiplayerOn('player_action', (data: any) => {
+      console.log('[Co-op] Received player action from opponent:', data);
+      // When guest receives player_action, they should update enemies based on the move
+      if (data.updatedEnemies) {
+        setEnemies(data.updatedEnemies);
+      }
+      if (data.currentActiveTurn) {
+        setCurrentActiveTurn(data.currentActiveTurn);
+        // When we receive an action, it's now OUR turn
+        const isMyTurn = data.currentActiveTurn === localCoopRole;
+        setIsPlayerTurn(isMyTurn);
+      }
+      if (data.combatLog) {
+        setCombatLog(prev => [...prev, data.combatLog]);
+      }
+    });
+
+    return unsubscribe;
+  }, [isMultiplayer, multiplayerOn, localCoopRole]);
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+
+    const unsubscribe = multiplayerOn('coop_progress_ready', (data: any) => {
+      if (data.label) {
+        setCoopProgressLabel(data.label);
+      }
+      setRemoteCoopProgressReady(Boolean(data.ready));
+    });
+
+    return unsubscribe;
+  }, [isMultiplayer, multiplayerOn]);
+
+  // Broadcast enemy state changes when a move executes in multiplayer
+  const lastEnemiesRef = useRef<any[]>([]);
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerSend) return;
+    
+    // Check if enemies have changed from last known state
+    const enemiesChanged = JSON.stringify(lastEnemiesRef.current) !== JSON.stringify(enemies);
+    if (enemiesChanged && enemies.length > 0) {
+      console.log('[Co-op Auto-Broadcast] Enemy state changed, broadcasting to opponent');
+      // Compute what the next turn should be: if we just acted, it's now the other player's turn
+      const nextTurn = !isPlayerTurn ? (currentActiveTurn === 'host' ? 'guest' : 'host') : currentActiveTurn;
+      const actionPayload = {
+        moveId: 'auto_broadcast',
+        targetId: selectedTargetId,
+        updatedEnemies: enemies,
+        currentActiveTurn: nextTurn,
+        playerRole: isGameHost ? 'host' : 'guest',
+        timestamp: Date.now(),
+      };
+      
+      multiplayerSend('player_action', actionPayload);
+      lastEnemiesRef.current = JSON.parse(JSON.stringify(enemies)); // Deep copy for comparison
+    }
+  }, [enemies, isMultiplayer, multiplayerSend, isPlayerTurn, currentActiveTurn, selectedTargetId, isGameHost]);
+
   // Runtime Enemy Type
   type RuntimeEnemy = Enemy & {
     currentHealth: number;
@@ -250,24 +573,24 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   // Multi-enemy state
-  const [enemies, setEnemies] = useState<RuntimeEnemy[]>([]);
-  const enemiesRef = useRef(enemies);
+  const enemiesRef = useRef<any[]>([]);
   useEffect(() => {
     enemiesRef.current = enemies;
   }, [enemies]);
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
 
   const [showMoveSelection, setShowMoveSelection] = useState(false);
   const [showItemSelection, setShowItemSelection] = useState(false);
   const [showRewardScreen, setShowRewardScreen] = useState(false);
   const [showInterlude, setShowInterlude] = useState(false);
+  const [showEventIntro, setShowEventIntro] = useState(gameMode === 'event_goblin_ambush');
+  const [showEventInterlude, setShowEventInterlude] = useState(false);
+  const [showEventChest, setShowEventChest] = useState(false);
+  const [showEventVictoryScreen, setShowEventVictoryScreen] = useState(false);
+  const [eventReward, setEventReward] = useState<EventReward | null>(null);
   const [showShop, setShowShop] = useState(false);
   const [showRest, setShowRest] = useState(false);
   const [inventory, setInventory] = useState<Record<string, number>>({});
-  const [gold, setGold] = useState(startingGold);
   const [artifacts, setArtifacts] = useState<Record<string, number>>({}); // Legendary artifacts (Stacked)
-  const [combatLog, setCombatLog] = useState<string[]>([]);
-  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [isBlocking, setIsBlocking] = useState(false);
   const [isTraining, setIsTraining] = useState(false);
   const [takeExtraDamageNextTurn, setTakeExtraDamageNextTurn] = useState(false);
@@ -280,6 +603,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [lastMoveIdByEnemy, setLastMoveIdByEnemy] = useState<Record<string, string>>({});
   const lastMoveIdByEnemyRef = useRef<Record<string, string>>({});
   const elfKingCooldownsRef = useRef({ auroraBlast: 0, temporalCrowning: 0, elfParade: 0 });
+  const goblinSorcererCooldownRef = useRef(0);
+  const goblinQueenCooldownRef = useRef(0);
   const [activeCooldowns, setActiveCooldowns] = useState<Record<string, number>>({});
   const [blockCooldownTurns, setBlockCooldownTurns] = useState(0);
   const [bossChargeCount, setBossChargeCount] = useState(0);
@@ -503,6 +828,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const attackToUseRef = useRef(0);
 
   const maxPlayerHealth = hero.stats.health + permanentUpgrades.healthBonus + equipHealthBonus;
+
   const getStatCap = () => (currentStage === 4 ? 730 : currentStage === 3 ? 530 : currentStage === 2 ? 280 : 130);
 
   const ignoreCap = hasEquipment('beer') || hasEquipment('chinese_waving_cat');
@@ -534,6 +860,19 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const baseSpeed = hero.stats.speed + equipSpeedBonus + bonusSpeed + (pirateShipActive ? pirateShipSpeedBonus : 0);
   const effectiveSpeed = Math.max(0, Math.floor(baseSpeed * (playerSpeedDebuffTurns > 0 ? 0.5 : 1)));
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerSend) return;
+    multiplayerSend('player_status_update', {
+      health: playerHealth,
+      maxHealth: maxPlayerHealth,
+      resource: playerResource,
+      attack: finalAttack,
+      defense: finalDefense,
+      speed: effectiveSpeed,
+    });
+  }, [isMultiplayer, multiplayerSend, playerHealth, maxPlayerHealth, playerResource, finalAttack, finalDefense, effectiveSpeed]);
+
   const dodgeCap = hasEquipment('angelic_wings') ? 65 : 60;
   const rawDodgeChance = effectiveSpeed * 0.5 + bonusDodgeChance + (hero.uniqueAbility?.id === 'shadowstep' ? 25 : 0);
   const totalDodgeChance = Math.min(dodgeCap, rawDodgeChance);
@@ -566,7 +905,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const resourceType = hero.resourceType;
 
   // Get hero's moveset (including owned special moves)
-  const [characterMoves, setCharacterMoves] = useState<Move[]>(hero.moves);
+  // Boxer Glove passive (non-Brawler): permanently reduce the highest-CD move by 1 on equip
+  const _applyBoxerGloveCD = (moves: Move[]): Move[] => {
+    if (!equippedItems.includes('boxer_glove') || hero.classId === 'brawler') return moves;
+    const result = [...moves];
+    let maxCD = 0, maxIdx = -1;
+    result.forEach((m, i) => { if ((m.cooldown ?? 0) > maxCD) { maxCD = m.cooldown ?? 0; maxIdx = i; } });
+    if (maxIdx >= 0 && maxCD > 0) result[maxIdx] = { ...result[maxIdx], cooldown: maxCD - 1 };
+    return result;
+  };
+  const [characterMoves, setCharacterMoves] = useState<Move[]>(_applyBoxerGloveCD(hero.moves));
 
   // Stage 4 Move States
   const [manaSurgeTurns, setManaSurgeTurns] = useState(0);
@@ -577,25 +925,25 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (hero.classId === 'duality') {
       if (hero.id === 'cedric') {
         if (dualityForm === 'human' || dualityForm === 'keyboard') {
-          setCharacterMoves(CEDRIC_HUMAN_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(CEDRIC_HUMAN_MOVES));
         } else if (dualityForm === 'beast') {
-          setCharacterMoves(CEDRIC_BEAST_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(CEDRIC_BEAST_MOVES));
         }
       } else if (hero.id === 'clyde') {
         if (dualityForm === 'normal') {
-          setCharacterMoves(CLYDE_NORMAL_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(CLYDE_NORMAL_MOVES));
         } else if (dualityForm === 'ghoul') {
-          setCharacterMoves(CLYDE_GHOUL_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(CLYDE_GHOUL_MOVES));
         }
       } else if (hero.id === 'wolfgang') {
         // Wolfgang Forms
         // Wolfgang Forms
         if (dualityForm === 'keyboard' || dualityForm === 'human') { // Default to keyboard
-          setCharacterMoves(WOLFGANG_KEYBOARD_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(WOLFGANG_KEYBOARD_MOVES));
         } else if (dualityForm === 'drums') {
-          setCharacterMoves(WOLFGANG_DRUMS_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(WOLFGANG_DRUMS_MOVES));
         } else if (dualityForm === 'violin') {
-          setCharacterMoves(WOLFGANG_VIOLIN_MOVES);
+          setCharacterMoves(_applyBoxerGloveCD(WOLFGANG_VIOLIN_MOVES));
         }
       }
     }
@@ -691,7 +1039,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (triggerEnemyTurn) {
       setTriggerEnemyTurn(false);
       setTimeout(() => {
-        enemyTurn();
+        runEnemyTurn();
       }, 500);
     }
   }, [triggerEnemyTurn]);
@@ -992,13 +1340,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const loadLevel = (level: number, stageOverride?: number) => {
     combatLockedRef.current = true; // Lock input during level setup
     const stageToLoad = stageOverride || currentStage;
-    const levelData = stageToLoad === 1
-      ? STAGE_1_LEVELS[level]
-      : stageToLoad === 2
-        ? STAGE_2_LEVELS[level]
-        : stageToLoad === 3
-          ? STAGE_3_LEVELS[level]
-          : STAGE_4_LEVELS[level];
+    let levelData;
+
+    if (gameMode === 'event_goblin_ambush') {
+      levelData = EVENT_GOBLIN_AMBUSH[level];
+    } else {
+      levelData = stageToLoad === 1
+        ? STAGE_1_LEVELS[level]
+        : stageToLoad === 2
+          ? STAGE_2_LEVELS[level]
+          : stageToLoad === 3
+            ? STAGE_3_LEVELS[level]
+            : STAGE_4_LEVELS[level];
+    }
+
     if (!levelData) return;
 
     // Reset Gift from the Gods usage if entering a new stage (detected via stage override or just logic)
@@ -1032,13 +1387,15 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Initialize enemies with their current health and scaled stats
     const initializedEnemies = levelData.enemies.map(e => {
-      const scaledHP = Math.floor(e.maxHealth * diffCfg.hpMod);
-      const scaledAtk = Math.floor(e.baseDamage * diffCfg.atkMod);
+      const scaledHP = Math.floor(e.maxHealth * diffCfg.hpMod * partyEnemyScale);
+      const scaledBaseDamage = Math.floor(e.baseDamage * diffCfg.atkMod * partyEnemyScale);
+      const scaledAttack = Math.floor(e.attack * partyEnemyScale);
       return {
         ...e,
         maxHealth: scaledHP,
         currentHealth: scaledHP,
-        baseDamage: scaledAtk,
+        attack: scaledAttack,
+        baseDamage: scaledBaseDamage,
         shield: 0,
         weaknessTurns: 0,
         poisonTurns: 0,
@@ -1060,6 +1417,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setMoveUsesThisTurn({});
     setIsTraining(false);
     setTakeExtraDamageNextTurn(false);
+    goblinSorcererCooldownRef.current = 0;
+    goblinQueenCooldownRef.current = 0;
     setLastMoveIdByEnemy({});
     lastMoveIdByEnemyRef.current = {};
 
@@ -1373,6 +1732,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
     }
 
+    // Bone Smasher Passive
+    if (hasEquipment('bone_smasher') && !isEnemyAttack) {
+      const defenseStacks = Math.floor(defenseStat / 10);
+      const damageMultiplier = 1 + Math.min(0.40, defenseStacks * 0.01);
+      finalDamage = Math.floor(finalDamage * damageMultiplier);
+    }
+
     // Fredrinn Passive: 8% Lifesteal
     if (hero.uniqueAbility?.id === 'bullet_vamp') {
       const lifesteal = calculateHeal(Math.floor(finalDamage * 0.08));
@@ -1405,6 +1771,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (target.name !== 'Shield Fairy' && enemies.some(e => e.name === 'Shield Fairy' && e.currentHealth > 0)) {
         finalDamage = Math.floor(finalDamage * 0.7);
       }
+    }
+
+    // Bone Smasher Passive
+    if (hasEquipment('bone_smasher')) {
+      const defenseStacks = Math.floor(defenseStat / 10);
+      const damageMultiplier = 1 + Math.min(0.40, defenseStacks * 0.01);
+      finalDamage = Math.floor(finalDamage * damageMultiplier);
     }
 
     // Fredrinn Passive: 8% Lifesteal
@@ -1694,14 +2067,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (item) {
       addLog(`🧰 Equipped ${item.name} for Stage 3!`);
     }
-    proceedToStage3AfterEquip();
+    requestCoopProgression('Stage 3 loadout ready', () => proceedToStage3AfterEquip());
   };
 
   const handleStage3EquipmentSkip = () => {
     setShowStage3EquipmentPick(false);
     setSelectedStage3EquipmentId(null);
     addLog('🧰 No additional equipment selected.');
-    proceedToStage3AfterEquip();
+    requestCoopProgression('Stage 3 loadout ready', () => proceedToStage3AfterEquip());
   };
 
   const resolveCedricBeastDeath = () => {
@@ -1992,7 +2365,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setManaSurgeTurns(prev => Math.max(0, prev - 1));
   };
 
-  const enemyTurn = (enemiesSnapshot = enemies, blockingThisTurn = false, extraDamageThisTurn = false) => {
+  const runEnemyTurn = (enemiesSnapshot = enemies, blockingThisTurn = false, extraDamageThisTurn = false) => {
     // --- Ensure Mischievous Troll's attack always matches the player's attack stat ---
     setEnemies(prev => prev.map(e =>
       e.name === 'Mischievous Troll' ? { ...e, attack: playerAttack } : e
@@ -2164,6 +2537,37 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             // Falls through to standard attack logic below if no special move used.
           } // End Elf King Logic
 
+          // Goblin Sorcerer Logic
+          if (enemy.id === 'goblin_sorcerer') {
+            if (goblinSorcererCooldownRef.current > 0) goblinSorcererCooldownRef.current--;
+
+            if (goblinSorcererCooldownRef.current === 0 && aliveEnemies.length < 6) {
+              const types = ['goblin_warrior', 'goblin_archer'];
+              const chosenType = types[Math.floor(Math.random() * types.length)];
+              const newEnemy = chosenType === 'goblin_warrior'
+                ? { id: `goblin_warrior_${Date.now()}`, name: 'Goblin Warrior', type: 'ENEMY' as const, maxHealth: 70, attack: 13, defense: 12, baseDamage: 14, currentHealth: 70, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 12 }
+                : { id: `goblin_archer_${Date.now()}`, name: 'Goblin Archer', type: 'ENEMY' as const, maxHealth: 50, attack: 15, defense: 8, baseDamage: 16, currentHealth: 50, shield: 0, weaknessTurns: 0, poisonTurns: 0, slowedTurns: 0, stunTurns: 0, burnTurns: 0, iceStormTurns: 0, standoffTurns: 0, speed: 14 };
+
+              setEnemies(prev => [...prev, newEnemy]);
+              goblinSorcererCooldownRef.current = 2; // Every other turn
+              addLog(`🧙‍♂️ Goblin Sorcerer chants and summons a ${newEnemy.name}!`);
+              skipStandardAttack = true;
+            }
+          }
+
+          // Goblin Queen Logic
+          if (enemy.id === 'boss_queen') {
+            if (goblinQueenCooldownRef.current > 0) goblinQueenCooldownRef.current--;
+
+            if (goblinQueenCooldownRef.current === 0) {
+              setTakeExtraDamageNextTurn(true);
+              setPlayerWeaknessTurns(2);
+              goblinQueenCooldownRef.current = 3; // Cooldown of 3
+              addLog(`👑 Goblin Queen hexes you! You are struck with Weakness and Vulnerability!`);
+              skipStandardAttack = true;
+            }
+          }
+
           // Check if enemy is stunned
           if (enemy.stunTurns > 0) {
             addLog(`💫 ${enemy.name} is STUNNED and cannot act!`);
@@ -2219,11 +2623,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 if (stillAlive.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
                   setTimeout(() => {
-                    if (currentLevel % 3 === 0) {
-                      setShowInterlude(true);
-                    } else {
-                      setShowRewardScreen(true);
-                    }
+                    triggerVictoryDisplay();
                   }, 1000);
                 }
               }
@@ -2253,11 +2653,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               if (stillAlive.length === 0) {
                 addLog(`🏆 All enemies defeated by Ice Storm! Victory!`);
                 setTimeout(() => {
-                  if (currentLevel % 3 === 0) {
-                    setShowInterlude(true);
-                  } else {
-                    setShowRewardScreen(true);
-                  }
+                  triggerVictoryDisplay();
                 }, 1000);
               }
 
@@ -2317,11 +2713,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 if (stillAlive.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
                   setTimeout(() => {
-                    if (currentLevel % 3 === 0) {
-                      setShowInterlude(true);
-                    } else {
-                      setShowRewardScreen(true);
-                    }
+                    triggerVictoryDisplay();
                   }, 1000);
                 }
               }
@@ -2487,6 +2879,10 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               addLog(getJesterTaunt());
             }
 
+            const enemyTarget: 'local' | 'remote' = isMultiplayer && remoteHero && remotePlayerHealth > 0 && Math.random() < 0.5 ? 'remote' : 'local';
+            const enemyTargetName = enemyTarget === 'remote' ? remoteHero?.name ?? 'Partner' : hero.name;
+            setLastEnemyTarget(enemyTarget);
+
             // Roll & Slip: on the enemy's first attack, grants +20% dodge chance
             // and if Feyland dodges (any reason), retaliates with 70 damage
             let rollSlipDodgeTriggered = false;
@@ -2496,7 +2892,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               setRollAndSlipDodgeActive(false); // Always consume flag on first incoming attack
               rollSlipBonusDodge = 20; // +20% extra dodge chance
             }
-            const shouldDodge = guaranteedDodgeRef.current || Math.random() * 100 < (totalDodgeChance + rollSlipBonusDodge);
+            const shouldDodge = enemyTarget === 'local' && (guaranteedDodgeRef.current || Math.random() * 100 < (totalDodgeChance + rollSlipBonusDodge));
             if (shouldDodge) {
               // If Roll & Slip is active and dodge succeeded, counter-attack
               if (rollSlipBonusDodge > 0) {
@@ -2565,11 +2961,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                           if (allDead) {
                             addLog(`🏆 All enemies defeated! Victory!`);
                             setTimeout(() => {
-                              if (currentLevel % 3 === 0) {
-                                setShowInterlude(true);
-                              } else {
-                                setShowRewardScreen(true);
-                              }
+                              triggerVictoryDisplay();
                             }, 1000);
                           }
                           return prevEnemies;
@@ -2591,7 +2983,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               return;
             }
 
-            const defenseForDamage = defenseToUse;
+            const defenseForDamage = enemyTarget === 'remote' ? remoteHero?.stats.defense ?? defenseToUse : defenseToUse;
 
             // Determine if using Giant Spear or normal attack
             let baseDamageForAttack = isUsingGiantSpear ? 35 : enemy.baseDamage;
@@ -2607,12 +2999,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
             // Shield Fairy: Deals 3% Max HP True Damage
             if (enemy.name === 'Shield Fairy') {
-              damage = Math.ceil(maxPlayerHealth * 0.03);
+              damage = Math.ceil((enemyTarget === 'remote' ? remoteMaxPlayerHealth || remoteHero?.stats.health || maxPlayerHealth : maxPlayerHealth) * 0.03);
               addLog(`🧚 Shield Fairy drains life! Consuming 3% Max HP (${damage})!`);
             }
 
             // Moss Golem: Dangerous Smell
-            if (enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
+            if (enemyTarget === 'local' && enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
               const isLethal = Math.random() < 0.1;
               setPlayerPoisonTurns(3);
               setIsPlayerPoisonLethal(isLethal);
@@ -2624,20 +3016,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
 
             // Vine Monster: Vine Snatch
-            if (enemy.traitId === 'vine_snatch' && Math.random() < 0.4) {
+            if (enemyTarget === 'local' && enemy.traitId === 'vine_snatch' && Math.random() < 0.4) {
               setVineTrapTurns(1);
               addLog(`🌿 ${enemy.name} uses Vine Snatch! You are wrapped up and your defense is lowered!`);
             }
 
             // Apply block damage reduction if player blocked this turn
-            if (blockingThisTurn && index === 0) {
+            if (enemyTarget === 'local' && blockingThisTurn && index === 0) {
               damage = Math.floor(damage * 0.3);
               addLog(`🛡️ You blocked ${enemy.name}'s attack! Reduced damage to ${damage}!`);
               setIsBlocking(false);
               setBlockCooldownTurns(2);
             }
 
-            if (artifacts['slime_boots'] && !slimeBootsUsedThisLevel) {
+            if (enemyTarget === 'local' && artifacts['slime_boots'] && !slimeBootsUsedThisLevel) {
               const reduction = 0.1; // Always 10% for first hit
               const reducedDamage = Math.floor(damage * (1 - reduction));
               damage = Math.max(0, reducedDamage);
@@ -2645,20 +3037,22 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               addLog(`🟢 Slime Boots reduce the first hit by 10% of damage!`);
             }
 
-            damage = applyTurtleShellReduction(damage);
+            if (enemyTarget === 'local') {
+              damage = applyTurtleShellReduction(damage);
+            }
 
             // Feyland Iron Wall passive: 20% DR when below 50% max HP
-            if (hero.id === 'feyland' && playerHealthRef.current < maxPlayerHealth * 0.5) {
+            if (enemyTarget === 'local' && hero.id === 'feyland' && playerHealthRef.current < maxPlayerHealth * 0.5) {
               damage = Math.floor(damage * 0.8);
               addLog(`🛡️ Iron Wall! Feyland's resilience reduces incoming damage by 20%!`);
             }
 
-            if (channelingGuardActive) {
+            if (enemyTarget === 'local' && channelingGuardActive) {
               damage = Math.floor(damage * 0.5);
               addLog(`✨ Channeling reduces ${enemy.name}'s damage by 50%!`);
             }
 
-            const currentShield = playerShieldRef.current;
+            const currentShield = enemyTarget === 'local' ? playerShieldRef.current : 0;
             let damageToHealth = damage;
 
             if (currentShield > 0) {
@@ -2677,31 +3071,42 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             }
 
             // PERMAFROST PASSIVE: Check first - breaks and negates ALL damage
-            if (hero.id === 'meryn' && permafrostIceActiveRef.current) {
+            if (enemyTarget === 'local' && hero.id === 'meryn' && permafrostIceActiveRef.current) {
               permafrostIceActiveRef.current = false;
               setPermafrostIceActive(false);
               addLog(`❄️ Permafrost Ice Shield breaks! First attack was completely negated!`);
             } else {
-              setPlayerHealth((prevHealth) => {
-                const newHealth = Math.max(0, prevHealth - damageToHealth);
-                playerHealthRef.current = newHealth;
-
-                if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
-                  const reviveHealth = resolveCedricBeastDeath();
-                  if (reviveHealth !== null) {
-                    playerHealthRef.current = reviveHealth;
-                    return reviveHealth;
-                  }
-                  const soulReviveHealth = resolveClydeSoulRevive();
-                  if (soulReviveHealth !== null) {
-                    playerHealthRef.current = soulReviveHealth;
-                    return soulReviveHealth;
-                  }
-                  startDefeatTransition(800);
+              if (enemyTarget === 'remote') {
+                setRemotePlayerHealth((prevHealth) => Math.max(0, prevHealth - damageToHealth));
+                if (multiplayerSend) {
+                  multiplayerSend('coop_damage_player', {
+                    targetRole: localCoopRole === 'host' ? 'guest' : 'host',
+                    damage: damageToHealth,
+                    source: enemy.name,
+                  });
                 }
+              } else {
+                setPlayerHealth((prevHealth) => {
+                  const newHealth = Math.max(0, prevHealth - damageToHealth);
+                  playerHealthRef.current = newHealth;
 
-                return newHealth;
-              });
+                  if (newHealth === 0 && !isDefeatAnimating && !showLoseScreen) {
+                    const reviveHealth = resolveCedricBeastDeath();
+                    if (reviveHealth !== null) {
+                      playerHealthRef.current = reviveHealth;
+                      return reviveHealth;
+                    }
+                    const soulReviveHealth = resolveClydeSoulRevive();
+                    if (soulReviveHealth !== null) {
+                      playerHealthRef.current = soulReviveHealth;
+                      return soulReviveHealth;
+                    }
+                    startDefeatTransition(800);
+                  }
+
+                  return newHealth;
+                });
+              }
 
               if (isCritical) {
                 addLog(`💥 CRITICAL HIT! ${enemy.name} attacks for ${damage} damage!`);
@@ -2715,13 +3120,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 }
               }
 
-              if (enemy.name === 'Lava Pebble' && Math.random() < 0.30) {
+              if (isMultiplayer) {
+                addLog(`Target: ${enemyTargetName}.`);
+              }
+
+              if (enemyTarget === 'local' && enemy.name === 'Lava Pebble' && Math.random() < 0.30) {
                 setPlayerBurnTurns(3);
                 addLog(`🔥 Lava Pebble scorches you! (Burning 3 turns)`);
               }
 
               // Robin Hood AI
-              if (enemy.name === 'Robin Hood') {
+              if (enemyTarget === 'local' && enemy.name === 'Robin Hood') {
                 if (robinHoodRageMeter >= 5) {
                   // Devastation Shot (Replaces Normal Attack)
                   setPlayerDevastationTurns(2);
@@ -2787,7 +3196,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               }
 
               // Moss Golem: Dangerous Smell
-              if (enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
+              if (enemyTarget === 'local' && enemy.traitId === 'dangerous_smell' && Math.random() < 0.3) {
                 const isLethal = Math.random() < 0.1;
                 setPlayerPoisonTurns(3);
                 setIsPlayerPoisonLethal(isLethal);
@@ -2798,7 +3207,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 }
               }
 
-              if (magicBurstWeaknessChance > 0 && Math.random() < magicBurstWeaknessChance) {
+              if (enemyTarget === 'local' && magicBurstWeaknessChance > 0 && Math.random() < magicBurstWeaknessChance) {
                 setPlayerWeaknessTurns(2);
                 addLog('💀 Magic Burst weakens you for 2 turns!');
               }
@@ -3065,15 +3474,47 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`💥 POWER PUNCH! Feyland unleashes 180 damage on ${ppTargetEnemy.name}!`);
 
           if (ppNewHealth === 0) {
+            const allDead = updatedEnemies.every(e => e.currentHealth === 0);
             setTimeout(() => handleEnemyDefeated(ppTargetEnemy, updatedEnemies, []), 300);
-            return; // Hand off to centralized victory handler
+            if (allDead) return; // Hand off to centralized victory handler
           }
         }
       }
     }
 
-    setIsPlayerTurn(true);
+    if (isMultiplayer) {
+      setCoopTurnPhase('host');
+      setIsPlayerTurn(localCoopRole === 'host');
+    } else {
+      setIsPlayerTurn(true);
+    }
   };
+
+  const enemyTurn = useCallback((enemiesSnapshot = enemiesRef.current, blockingThisTurn = false, extraDamageThisTurn = false) => {
+    if (!isMultiplayer) {
+      runEnemyTurn(enemiesSnapshot, blockingThisTurn, extraDamageThisTurn);
+      return;
+    }
+
+    if (currentActiveTurn === 'enemies') {
+      runEnemyTurn(enemiesSnapshot, blockingThisTurn, extraDamageThisTurn);
+      return;
+    }
+
+    if (currentActiveTurn === 'host') {
+      setCoopTurnPhase('guest');
+      setIsPlayerTurn(localCoopRole === 'guest');
+      addLog('Co-op turn: Guest is up.');
+      return;
+    }
+
+    setCoopTurnPhase('enemies');
+    setIsPlayerTurn(false);
+    addLog('Co-op turn: Enemies are up.');
+    runEnemyTurn(enemiesSnapshot, blockingThisTurn, extraDamageThisTurn);
+  }, [isMultiplayer, currentActiveTurn, localCoopRole, setCoopTurnPhase, enemiesRef]);
+
+  const advanceCoopTurnOrRunEnemies = enemyTurn;
 
   const gameEnded = showRewardScreen || showLoseScreen;
 
@@ -3374,6 +3815,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     );
 
     setEnemies(updated);
+    
+    // Broadcast player action in multiplayer co-op
+    if (isMultiplayer && multiplayerSend) {
+      broadcastPlayerAction('single_target_damage', target.id, updated, `💥 Dealt ${damage} damage to ${target.name}!`);
+    }
 
     // Check for victory/kill immediately using the local updated variable
     const deadEnemy = updated.find(e => e.id === target.id && e.currentHealth === 0);
@@ -3383,8 +3829,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (aliveAfter.length === 0) {
         addLog(`🏆 All enemies defeated! Victory!`);
         setTimeout(() => {
-          if ([3, 6, 9].includes(currentLevel)) setShowInterlude(true);
-          else setShowRewardScreen(true);
+          triggerVictoryDisplay();
         }, 1000);
         return;
       } else if (selectedTargetId === deadEnemy.id) {
@@ -3681,11 +4126,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (allDead) {
         addLog(`🏆 All enemies defeated! Victory!`);
         setTimeout(() => {
-          if (currentLevel % 3 === 0) {
-            setShowInterlude(true);
-          } else {
-            setShowRewardScreen(true);
-          }
+          triggerVictoryDisplay();
         }, 1000);
         return;
       }
@@ -3697,16 +4138,54 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setIsPlayerTurn(true);
       } else {
         setIsPlayerTurn(false);
-        enemyTurn(updatedEnemies, false, false);
+        advanceCoopTurnOrRunEnemies(updatedEnemies, false, false);
       }
     }, 500);
   };
+
+  const broadcastPlayerAction = useCallback((moveId: string, targetId: string | null, updatedEnemiesList: any[], latestLog: string) => {
+    if (!isMultiplayer || !multiplayerSend) return;
+    
+    // Broadcast player's move action to the other player
+    const actionPayload = {
+      moveId,
+      targetId,
+      updatedEnemies: updatedEnemiesList,
+      currentActiveTurn: currentActiveTurn === 'host' ? 'guest' : 'host',
+      combatLog: latestLog,
+      playerRole: isGameHost ? 'host' : 'guest',
+      timestamp: Date.now(),
+    };
+    
+    multiplayerSend('player_action', actionPayload);
+    console.log('[Co-op] Broadcasting player action:', actionPayload);
+  }, [isMultiplayer, multiplayerSend, currentActiveTurn, isGameHost]);
+
+  // Wrapper for setEnemies that automatically broadcasts in multiplayer
+  const setEnemiesAndBroadcast = useCallback((updatedEnemies: any[], actionDescription: string = 'attack') => {
+    setEnemies(updatedEnemies);
+    
+    // Broadcast the updated enemy state to the other player
+    if (isMultiplayer && multiplayerSend) {
+      const actionPayload = {
+        moveId: actionDescription,
+        targetId: selectedTargetId,
+        updatedEnemies,
+        currentActiveTurn,
+        playerRole: isGameHost ? 'host' : 'guest',
+        timestamp: Date.now(),
+      };
+      
+      multiplayerSend('player_action', actionPayload);
+      console.log('[Co-op] Broadcasting enemy update:', actionPayload);
+    }
+  }, [isMultiplayer, multiplayerSend, selectedTargetId, currentActiveTurn, isGameHost]);
 
   const endPlayerTurn = (m: Move) => {
     decrementCooldowns();
     setActiveCooldowns(prev => ({ ...prev, [m.id]: m.cooldown }));
     setIsPlayerTurn(false);
-    enemyTurn(undefined, false, false);
+    advanceCoopTurnOrRunEnemies(undefined, false, false);
   };
 
   const handleMoveSelect = (move: Move) => {
@@ -3717,6 +4196,9 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Prevent move usage if not player's turn (e.g. enemy turn or animation)
     if (!isPlayerTurn && !cheatBuffer) return;
+    
+    // Prevent move usage if not this player's turn in multiplayer
+    if (!canTakeAction() && !cheatBuffer) return;
 
     if (entrapmentTurns > 0 && entrapmentMoveId === move.id) {
       addLog(`⛓️ Entrapment seals ${move.name}! Choose a different move.`);
@@ -4400,11 +4882,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                 if (aliveAfter.length === 0) {
                   addLog(`🏆 All enemies defeated! Victory!`);
                   setTimeout(() => {
-                    if (currentLevel % 3 === 0) {
-                      setShowInterlude(true);
-                    } else {
-                      setShowRewardScreen(true);
-                    }
+                    triggerVictoryDisplay();
                   }, 1000);
                 } else {
                   decrementCooldowns();
@@ -4629,11 +5107,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           if (stillAlive.length === 0) {
             addLog(`🏆 All enemies defeated! Victory!`);
             setTimeout(() => {
-              if (currentLevel % 3 === 0) {
-                setShowInterlude(true);
-              } else {
-                setShowRewardScreen(true);
-              }
+              triggerVictoryDisplay();
             }, 1000);
             return;
           }
@@ -4739,11 +5213,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           if (stillAlive.length === 0) {
             addLog(`🏆 All enemies defeated! Victory!`);
             setTimeout(() => {
-              if (currentLevel % 3 === 0) {
-                setShowInterlude(true);
-              } else {
-                setShowRewardScreen(true);
-              }
+              triggerVictoryDisplay();
             }, 1000);
             return;
           }
@@ -4812,11 +5282,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (stillAlive.length === 0) {
               addLog(`🏆 All enemies defeated! Victory!`);
               setTimeout(() => {
-                if (currentLevel % 3 === 0) {
-                  setShowInterlude(true);
-                } else {
-                  setShowRewardScreen(true);
-                }
+                triggerVictoryDisplay();
               }, 1000);
             } else {
               decrementCooldowns();
@@ -4899,11 +5365,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (stillAlive.length === 0) {
               addLog(`🏆 All enemies defeated by Ice Storm! Victory!`);
               setTimeout(() => {
-                if (currentLevel % 3 === 0) {
-                  setShowInterlude(true);
-                } else {
-                  setShowRewardScreen(true);
-                }
+                triggerVictoryDisplay();
               }, 1000);
             }
           }, 100);
@@ -5143,11 +5605,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
             if (aliveAfter.length === 0) {
               addLog(`🏆 All enemies defeated! Victory!`);
               setTimeout(() => {
-                if (currentLevel % 3 === 0) {
-                  setShowInterlude(true);
-                } else {
-                  setShowRewardScreen(true);
-                }
+                triggerVictoryDisplay();
               }, 1000);
             }
           }, 500);
@@ -5743,7 +6201,6 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setTideCallActive(true);
       addLog(`🌊 Tide Call! Next attack deals +50% damage and you heal ${healAmt} HP! (-${move.cost} ${resourceType})`);
     } else if (move.id === 'guard' && hero.classId === 'brawler') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
       const shieldAmount = Math.floor(maxPlayerHealth * 0.15);
       setPlayerShield(prev => prev + shieldAmount);
       setPlayerTemporaryShieldTurns(1);
@@ -5843,17 +6300,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       consumePlayerWeaknessTurn();
       decrementCooldowns();
       setIsPlayerTurn(false);
-      enemyTurn();
+      advanceCoopTurnOrRunEnemies();
     };
   }
 
   const handleFight = () => {
-    if (!isPlayerTurn) return;
+    if (!isPlayerTurn || !canTakeAction()) return;
     setShowMoveSelection(true);
   };
 
   const handleUseItem = () => {
-    if (!isPlayerTurn) return;
+    if (!isPlayerTurn || !canTakeAction()) return;
     setShowItemSelection(true);
   };
 
@@ -5907,11 +6364,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setEnemies(prev => prev.map(e => ({ ...e, currentHealth: 0 })));
         setIsPlayerTurn(false);
         setTimeout(() => {
-          if (currentLevel % 3 === 0) {
-            setShowInterlude(true);
-          } else {
-            setShowRewardScreen(true);
-          }
+          triggerVictoryDisplay();
         }, 300);
         return;
       }
@@ -6000,7 +6453,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     decrementCooldowns();
 
     setIsPlayerTurn(false);
-    enemyTurn(enemies, false, false);
+    advanceCoopTurnOrRunEnemies(enemies, false, false);
   };
 
   const applyRewardLoot = (loot: LootItem) => {
@@ -6038,13 +6491,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setGold(prev => prev + amount);
     setTotalGoldEarned(prev => prev + amount);
     addLog(`💰 Received ${amount} gold! Total: ${gold + amount}`);
-    proceedToNextLevel();
+    requestCoopProgression('Rewards claimed', () => proceedToNextLevel());
   };
 
   const handleSelectChest = (loot: LootItem) => {
     applyRewardLoot(loot);
 
-    proceedToNextLevel();
+    requestCoopProgression('Rewards claimed', () => proceedToNextLevel());
   };
 
   const handleSelectBossChest = () => {
@@ -6056,7 +6509,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     };
     applyRewardLoot(bossBonusLoot);
 
-    proceedToNextLevel();
+    requestCoopProgression('Rewards claimed', () => proceedToNextLevel());
   };
 
   const handleSelectBossLoots = (primaryLoot: LootItem, bonusLoot?: LootItem) => {
@@ -6064,8 +6517,94 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (bonusLoot) {
       applyRewardLoot(bonusLoot);
     }
-    proceedToNextLevel();
+    requestCoopProgression('Rewards claimed', () => proceedToNextLevel());
   };
+
+  const requestCoopProgression = (label: string, action: () => void) => {
+    if (!isMultiplayer) {
+      action();
+      return;
+    }
+
+    pendingCoopProgressionRef.current = action;
+    setCoopProgressLabel(label);
+    setCoopProgressReady(false);
+    setShowCoopProgressGate(true);
+  };
+
+  const completeCoopProgressionIfReady = (localReady: boolean, remoteReady: boolean) => {
+    if (!localReady || !remoteReady || !pendingCoopProgressionRef.current) return;
+
+    const action = pendingCoopProgressionRef.current;
+    pendingCoopProgressionRef.current = null;
+    setShowCoopProgressGate(false);
+    setCoopProgressReady(false);
+    setRemoteCoopProgressReady(false);
+    action();
+  };
+
+  const handleCoopProgressReady = () => {
+    const nextReady = true;
+    setCoopProgressReady(nextReady);
+    if (multiplayerSend) {
+      multiplayerSend('coop_progress_ready', { ready: nextReady, label: coopProgressLabel });
+    }
+    completeCoopProgressionIfReady(nextReady, remoteCoopProgressReady);
+  };
+
+  useEffect(() => {
+    completeCoopProgressionIfReady(coopProgressReady, remoteCoopProgressReady);
+  }, [coopProgressReady, remoteCoopProgressReady]);
+
+  // Local-only victory display (no broadcast) — used when receiving from opponent
+  const triggerVictoryDisplayLocal = () => {
+    const victoryKey = `${gameMode}:${currentStage}:${currentLevel}`;
+    if (displayedVictoryKeyRef.current === victoryKey) return;
+    if (showRewardScreen || showInterlude || showShop || showRest || showCoopProgressGate || isTransitioning) return;
+
+    displayedVictoryKeyRef.current = victoryKey;
+    if (gameMode === 'event_goblin_ambush') {
+      if (currentLevel === 5) {
+        if (onEquipmentUnlocked) onEquipmentUnlocked('bone_smasher');
+        setShowEventVictoryScreen(true);
+      } else {
+        setShowEventInterlude(true);
+      }
+    } else {
+      if (currentLevel % 3 === 0) {
+        setShowInterlude(true);
+      } else {
+        setShowRewardScreen(true);
+      }
+    }
+  };
+
+  const triggerVictoryDisplay = () => {
+    // Broadcast stage progression to the other player in co-op (only once, not when receiving)
+    if (isMultiplayer && multiplayerSend && !receivingStageEventRef.current) {
+      multiplayerSend('stage_event', { event: 'victory', stage: currentStage, level: currentLevel });
+      console.log('[Co-op] Broadcasting stage victory event');
+    }
+    triggerVictoryDisplayLocal();
+  };
+
+  useEffect(() => {
+    if (!isMultiplayer || !multiplayerOn) return;
+
+    const unsubscribe = multiplayerOn('stage_event', (data: any) => {
+      console.log('[Co-op] Received stage event:', data);
+      if (data.event === 'victory' && !receivingStageEventRef.current) {
+        if (typeof data.stage === 'number' && typeof data.level === 'number' && (data.stage !== currentStage || data.level !== currentLevel)) {
+          return;
+        }
+        receivingStageEventRef.current = true;
+        setTimeout(() => { receivingStageEventRef.current = false; }, 2000);
+        triggerVictoryDisplayLocal();
+      }
+    });
+
+    return unsubscribe;
+  }, [isMultiplayer, multiplayerOn, currentStage, currentLevel]);
 
   const proceedToNextLevel = () => {
     // Award diamonds for beating the level, scaled by difficulty
@@ -6222,14 +6761,19 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   const handleCloseShop = () => {
-    setShowShop(false);
     if (isPostStageTransitionShop) {
-      setIsPostStageTransitionShop(false);
-      setIsTransitioning(false);
+      requestCoopProgression('Shop complete', () => {
+        setShowShop(false);
+        setIsPostStageTransitionShop(false);
+        setIsTransitioning(false);
+      });
       return;
     }
-    setIsTransitioning(true);
-    proceedToNextLevel();
+    requestCoopProgression('Shop complete', () => {
+      setShowShop(false);
+      setIsTransitioning(true);
+      proceedToNextLevel();
+    });
   };
 
   const handleRest = () => {
@@ -6237,9 +6781,11 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     const healAmount = calculateHeal(baseHeal);
     setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
     addLog(`💚 Rested and recovered ${healAmount} HP!`);
-    setShowRest(false);
-    setIsTransitioning(true);
-    proceedToNextLevel();
+    requestCoopProgression('Rest complete', () => {
+      setShowRest(false);
+      setIsTransitioning(true);
+      proceedToNextLevel();
+    });
   };
 
   const handleSelectShop = () => {
@@ -6293,7 +6839,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   };
 
   const handleBlock = () => {
-    if (!isPlayerTurn || blockCooldownTurns > 0) return;
+    if (!isPlayerTurn || blockCooldownTurns > 0 || !canTakeAction()) return;
 
     setIsBlocking(true);
     addLog('🛡️ You prepare to block the next attack!');
@@ -6303,7 +6849,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     setIsPlayerTurn(false);
     setBlockCooldownTurns(2);
-    enemyTurn(enemies, true, false);
+    advanceCoopTurnOrRunEnemies(enemies, true, false);
   };
 
   const handleEnemyDefeated = (defeatedEnemy: Enemy, currentEnemies: RuntimeEnemy[], freshlyOwnedArtifacts: string[] = []) => {
@@ -6511,17 +7057,25 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       decrementCooldowns();
 
       setTimeout(() => {
-        if (currentLevel % 3 === 0) {
-          setShowInterlude(true);
+        if (gameMode === 'event_goblin_ambush') {
+          if (currentLevel === 5) {
+            // Unlock immediately so they don't lose it if they refresh on the victory screen
+            if (onEquipmentUnlocked) {
+              onEquipmentUnlocked('bone_smasher');
+            }
+            setShowEventVictoryScreen(true);
+          } else {
+            setShowEventInterlude(true);
+          }
         } else {
-          setShowRewardScreen(true);
+          triggerVictoryDisplay();
         }
       }, 1000);
     }
   };
 
   const handleTrain = () => {
-    if (!isPlayerTurn) return;
+    if (!isPlayerTurn || !canTakeAction()) return;
 
     if (hasLavaGolem()) {
       addLog(`🌋 Lava Golem's heat prevents training!`);
@@ -6546,7 +7100,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       addLog(getJesterTaunt());
       decrementCooldowns();
       setIsPlayerTurn(false);
-      enemyTurn(updatedEnemies, false, true);
+      advanceCoopTurnOrRunEnemies(updatedEnemies, false, true);
       return;
     }
 
@@ -6583,7 +7137,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     decrementCooldowns();
 
     setIsPlayerTurn(false);
-    enemyTurn(enemies, false, true);
+    advanceCoopTurnOrRunEnemies(enemies, false, true);
   };
 
 
@@ -6622,7 +7176,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     setPlayerHealth(hero.stats.health + equipHealthBonus);
     setPlayerAttack(hero.stats.attack + equipAttackBonus);
     setPlayerDefense(hero.stats.defense + equipDefenseBonus);
-    setPlayerResource(100);
+    setPlayerResource(maxPlayerResource);
     setSelectedTargetId(null);
     setShowMoveSelection(false);
     setShowItemSelection(false);
@@ -6780,6 +7334,123 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     onBackToMenu();
   };
 
+  // --- Event Mode Interlude & Chest Handlers ---
+  const handleSelectMysteryChest = () => {
+    const roll = Math.random() * 100;
+    let reward: EventReward;
+
+    if (roll < 35) {
+      // Item Stash (2-4 assorted items)
+      const itemPool = ['health_potion', 'energy_potion', 'weakness_potion', 'attack_boost', 'defense_boost', 'apple', 'bread'];
+      const numItems = Math.floor(Math.random() * 3) + 2; // 2 to 4 slots
+      const selectedItems: { id: string; name: string; quantity: number }[] = [];
+
+      const shuffled = [...itemPool].sort(() => 0.5 - Math.random());
+      const chosenIds = shuffled.slice(0, numItems);
+
+      const nextInventory = { ...inventory };
+      chosenIds.forEach(id => {
+        const qty = Math.floor(Math.random() * 3) + 1; // 1 to 3 of each
+        selectedItems.push({ id, name: ITEM_TYPES[id].name, quantity: qty });
+        nextInventory[id] = (nextInventory[id] || 0) + qty;
+      });
+
+      setInventory(nextInventory);
+      reward = { type: 'items', items: selectedItems };
+    } else if (roll < 70) {
+      // Stats (+20 Atk, +20 Def)
+      reward = { type: 'stats', attack: 20, defense: 20 };
+      setPlayerAttack(prev => prev + 20);
+      setPlayerDefense(prev => prev + 20);
+    } else {
+      // Random Artifact
+      const availableArtifacts = ['health_amulet', 'power_ring', 'lucky_charm', 'wooden_mask', 'slime_boots', 'shield_pendant', 'healing_potion', 'speed_boots', 'thieves_gloves'];
+      const randomArtifact = availableArtifacts[Math.floor(Math.random() * availableArtifacts.length)];
+      const artifactLoot = Object.values(LOOT_ITEMS).find((i: any) => i.id === randomArtifact) as any;
+      reward = {
+        type: 'artifact',
+        artifactId: randomArtifact,
+        artifactName: artifactLoot?.name || randomArtifact.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+        artifactIcon: artifactLoot?.icon || '💎'
+      };
+      setArtifacts(prev => ({
+        ...prev,
+        [randomArtifact]: (prev[randomArtifact] || 0) + 1
+      }));
+    }
+
+    setEventReward(reward);
+    setShowEventInterlude(false);
+    setShowEventChest(true);
+  };
+
+  const handleEventRest = () => {
+    const healAmount = Math.floor(maxPlayerHealth * 0.5);
+    setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmount));
+    requestCoopProgression('Rest complete', () => {
+      setShowEventInterlude(false);
+      proceedToNextLevel();
+    });
+  };
+
+  const handleContinueAfterChest = () => {
+    requestCoopProgression('Event reward claimed', () => {
+      setShowEventChest(false);
+      proceedToNextLevel();
+    });
+  };
+
+  if (showCoopProgressGate) {
+    return (
+      <div className="size-full bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(17,24,39,1),rgba(2,6,23,1))]" />
+        <ParticleBackground />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 16 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="relative z-10 w-full max-w-xl rounded-3xl border border-white/10 bg-slate-900/80 p-8 text-center shadow-2xl shadow-black/50 backdrop-blur-xl"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-emerald-300">Co-op Checkpoint</p>
+          <h2 className="mt-3 text-3xl font-black uppercase tracking-widest text-slate-100">{coopProgressLabel}</h2>
+          <p className="mt-3 text-sm text-slate-400">Both players must ready up before the run continues.</p>
+
+          <div className="mt-8 grid grid-cols-2 gap-4">
+            <div className={`rounded-2xl border p-4 transition-all ${coopProgressReady ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-100' : 'border-white/10 bg-slate-950/60 text-slate-400'}`}>
+              <p className="text-[10px] font-bold uppercase tracking-widest">You</p>
+              <p className="mt-2 text-lg font-black">{coopProgressReady ? 'Ready' : 'Waiting'}</p>
+            </div>
+            <div className={`rounded-2xl border p-4 transition-all ${remoteCoopProgressReady ? 'border-emerald-400/60 bg-emerald-500/15 text-emerald-100' : 'border-white/10 bg-slate-950/60 text-slate-400'}`}>
+              <p className="text-[10px] font-bold uppercase tracking-widest">Partner</p>
+              <p className="mt-2 text-lg font-black">{remoteCoopProgressReady ? 'Ready' : 'Waiting'}</p>
+            </div>
+          </div>
+
+          <motion.button
+            whileHover={!coopProgressReady ? { scale: 1.04 } : {}}
+            whileTap={!coopProgressReady ? { scale: 0.98 } : {}}
+            onClick={handleCoopProgressReady}
+            disabled={coopProgressReady}
+            className={`mt-8 w-full rounded-2xl border px-8 py-4 text-sm font-black uppercase tracking-widest transition-all ${coopProgressReady
+              ? 'border-slate-700 bg-slate-800/60 text-slate-500 cursor-not-allowed'
+              : 'border-emerald-400/60 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30 shadow-lg shadow-emerald-500/10'
+              }`}
+          >
+            {coopProgressReady ? 'Ready Sent' : 'Ready to Continue'}
+          </motion.button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Show Event Intro
+  if (showEventIntro) {
+    return (
+      <EventIntroScreen
+        onComplete={() => setShowEventIntro(false)}
+      />
+    );
+  }
+
   // Show interlude screen if active (levels 3, 6, 9)
   if (showInterlude) {
     return (
@@ -6787,6 +7458,40 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         currentLevel={currentLevel}
         onSelectShop={handleSelectShop}
         onSelectRest={handleSelectRest}
+      />
+    );
+  }
+
+  // Show Event Interlude (Custom Event Choice)
+  if (showEventInterlude) {
+    return (
+      <EventInterludeScreen
+        currentLevel={currentLevel}
+        onSelectChest={handleSelectMysteryChest}
+        onSelectRest={handleEventRest}
+      />
+    );
+  }
+
+  // Show Event Victory Screen
+  if (showEventVictoryScreen) {
+    return (
+      <EventVictoryScreen
+        eventName="Goblin Ambush"
+        equipmentName="Bone Smasher"
+        equipmentIcon="🦴"
+        equipmentDescription="+10 Attack. Increases all damage dealt based on total defense stacks (1% per stack, up to 40%)."
+        onContinue={onBackToMenu}
+      />
+    );
+  }
+
+  // Show Event Mystery Chest Screen
+  if (showEventChest && eventReward) {
+    return (
+      <EventChestScreen
+        reward={eventReward}
+        onContinue={handleContinueAfterChest}
       />
     );
   }
@@ -7284,11 +7989,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   if (aliveAfter.length === 0) {
                     addLog(`🏆 All enemies defeated! Victory!`);
                     setTimeout(() => {
-                      if (currentLevel % 3 === 0) {
-                        setShowInterlude(true);
-                      } else {
-                        setShowRewardScreen(true);
-                      }
+                      triggerVictoryDisplay();
                     }, 1000);
                   } else {
                     decrementCooldowns();
@@ -7857,11 +8558,16 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
               <div className="text-center">
                 <h2 className="text-lg sm:text-2xl text-slate-100 tracking-wider uppercase">
-                  Stage {currentStage} - Level {currentLevel}/{currentStage === 1 ? 10 : currentStage === 2 ? 12 : currentStage === 3 ? 16 : 20}
+                  {gameMode === 'event_goblin_ambush' ? (
+                    `Event - Level ${currentLevel}/5`
+                  ) : (
+                    `Stage ${currentStage} - Level ${currentLevel}/${currentStage === 1 ? 10 : currentStage === 2 ? 12 : currentStage === 3 ? 16 : 20}`
+                  )}
                 </h2>
-                {currentLevel === (currentStage === 1 ? 10 : currentStage === 2 ? 12 : 16) && (
-                  <p className="text-red-500 text-xs sm:text-sm tracking-widest uppercase mt-1">Boss Fight</p>
-                )}
+                {((gameMode === 'event_goblin_ambush' && currentLevel === 5) ||
+                  (gameMode !== 'event_goblin_ambush' && currentLevel === (currentStage === 1 ? 10 : currentStage === 2 ? 12 : 16))) && (
+                    <p className="text-red-500 text-xs sm:text-sm tracking-widest uppercase mt-1">Boss Fight</p>
+                  )}
               </div>
 
               <div className="flex items-center gap-2 text-yellow-400">
@@ -7870,10 +8576,128 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
               </div>
             </div>
 
+            {isMultiplayer && (
+              <div className="mb-6 rounded-2xl border border-white/10 bg-slate-950/70 p-3 backdrop-blur-md">
+                <div className="grid grid-cols-3 gap-2">
+                  {(['host', 'guest', 'enemies'] as CoopTurnPhase[]).map((phase, index) => {
+                    const isActivePhase = currentActiveTurn === phase;
+                    const label = phase === 'host' ? 'Player 1' : phase === 'guest' ? 'Player 2' : 'Enemies';
+                    const subLabel = phase === 'host' ? 'Host' : phase === 'guest' ? 'Guest' : 'Enemy Phase';
+
+                    return (
+                      <div
+                        key={phase}
+                        className={`relative rounded-xl border px-3 py-3 text-center transition-all ${isActivePhase
+                          ? 'border-emerald-400/70 bg-emerald-500/15 text-emerald-100 shadow-lg shadow-emerald-500/10'
+                          : 'border-white/10 bg-white/5 text-slate-400'
+                          }`}
+                      >
+                        <div className={`mx-auto mb-2 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-black ${isActivePhase
+                          ? 'border-emerald-300 bg-emerald-400 text-slate-950'
+                          : 'border-slate-600 bg-slate-900 text-slate-500'
+                          }`}>
+                          {index + 1}
+                        </div>
+                        <p className="text-xs font-black uppercase tracking-widest">{label}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-wider opacity-70">{subLabel}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Combat Area */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               {/* Player Side */}
               <div className="space-y-4">
+                {isMultiplayer ? (
+                  <div className="space-y-4">
+                    <h3 className="text-xl text-slate-100 tracking-wide uppercase text-center">Party</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className={`bg-slate-950/80 border rounded-2xl p-4 transition-all ${currentActiveTurn === localCoopRole ? 'border-emerald-400/70 shadow-lg shadow-emerald-500/10' : lastEnemyTarget === 'local' ? 'border-red-400/70 shadow-lg shadow-red-500/10' : 'border-white/10'}`}>
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">You</p>
+                            <p className="text-lg font-black text-slate-100">{hero.name}</p>
+                            <p className="text-xs text-slate-400">{hero.title}</p>
+                          </div>
+                          <span className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border ${currentActiveTurn === localCoopRole ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}`}>
+                            {currentActiveTurn === localCoopRole ? 'Active' : localCoopRole}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2 mb-3 text-center">
+                          <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Heart className="w-4 h-4 text-red-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{playerHealth}/{maxPlayerHealth}</p></div>
+                          <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Sword className="w-4 h-4 text-orange-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{finalAttack}</p></div>
+                          <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Shield className="w-4 h-4 text-blue-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{finalDefense}</p></div>
+                          <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Zap className="w-4 h-4 text-yellow-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{effectiveSpeed}</p></div>
+                        </div>
+                        <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mb-3">
+                          <div className="h-full bg-red-500 transition-all" style={{ width: `${Math.max(0, Math.min(100, (playerHealth / maxPlayerHealth) * 100))}%` }} />
+                        </div>
+                        <div className="mb-3 space-y-1">
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                            <span className="flex items-center gap-1">
+                              <Zap className="h-3 w-3 text-cyan-300" />
+                              {resourceType}
+                            </span>
+                            <span className="text-slate-100">{playerResource}/{maxPlayerResource}</span>
+                          </div>
+                          <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                            <div className="h-full bg-cyan-400 transition-all" style={{ width: `${Math.max(0, Math.min(100, (playerResource / Math.max(1, maxPlayerResource)) * 100))}%` }} />
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {runEquippedItems.length > 0 ? runEquippedItems.map(itemId => (
+                            <span key={itemId} className="text-[10px] text-slate-200 bg-slate-900/80 px-2 py-1 rounded-full border border-white/10">{getEquipmentItem(itemId)?.name}</span>
+                          )) : <span className="text-[10px] text-slate-500 italic">No equipped items</span>}
+                        </div>
+                      </div>
+
+                      {remoteHero && (
+                        <div className={`bg-slate-950/80 border rounded-2xl p-4 transition-all ${currentActiveTurn !== localCoopRole && currentActiveTurn !== 'enemies' ? 'border-emerald-400/70 shadow-lg shadow-emerald-500/10' : lastEnemyTarget === 'remote' ? 'border-red-400/70 shadow-lg shadow-red-500/10' : 'border-white/10'}`}>
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Partner</p>
+                              <p className="text-lg font-black text-slate-100">{remoteHero.name}</p>
+                              <p className="text-xs text-slate-400">{remoteHero.title}</p>
+                            </div>
+                            <span className={`text-[10px] uppercase tracking-widest px-2 py-1 rounded-full border ${currentActiveTurn !== localCoopRole && currentActiveTurn !== 'enemies' ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200' : 'border-white/10 bg-white/5 text-slate-400'}`}>
+                              {currentActiveTurn !== localCoopRole && currentActiveTurn !== 'enemies' ? 'Active' : 'Partner'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
+                            <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Heart className="w-4 h-4 text-red-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{remotePlayerHealth}/{remoteMaxPlayerHealth || remoteHero.stats.health}</p></div>
+                            <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Sword className="w-4 h-4 text-orange-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{remotePlayerAttack}</p></div>
+                            <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Shield className="w-4 h-4 text-blue-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{remotePlayerDefense}</p></div>
+                            <div className="rounded-lg bg-slate-900/80 border border-white/5 p-2"><Zap className="w-4 h-4 text-yellow-400 mx-auto mb-1" /><p className="text-xs font-bold text-slate-100">{remotePlayerSpeed}</p></div>
+                          </div>
+                          <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 mb-3">
+                            <div className="h-full bg-red-500 transition-all" style={{ width: `${Math.max(0, Math.min(100, (remotePlayerHealth / Math.max(1, remoteMaxPlayerHealth || remoteHero.stats.health)) * 100))}%` }} />
+                          </div>
+                          <div className="mb-3 space-y-1">
+                            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <Zap className="h-3 w-3 text-cyan-300" />
+                                {remoteResourceType}
+                              </span>
+                              <span className="text-slate-100">{remotePlayerResource}/{remoteMaxPlayerResource}</span>
+                            </div>
+                            <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                              <div className="h-full bg-cyan-400 transition-all" style={{ width: `${Math.max(0, Math.min(100, (remotePlayerResource / Math.max(1, remoteMaxPlayerResource)) * 100))}%` }} />
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {remoteEquippedItems.length > 0 ? remoteEquippedItems.map(itemId => (
+                              <span key={itemId} className="text-[10px] text-slate-200 bg-slate-900/80 px-2 py-1 rounded-full border border-white/10">{getEquipmentItem(itemId)?.name}</span>
+                            )) : <span className="text-[10px] text-slate-500 italic">No equipped items</span>}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                <>
                 <div className="text-center">
                   <h3 className="text-xl text-slate-100 tracking-wide uppercase mb-4">
                     {hero.name}
@@ -8019,6 +8843,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
                   dodgeCap={dodgeCap}
                   totalDodgeChance={totalDodgeChance}
                 />
+                </>
+                )}
               </div>
 
 
@@ -8112,14 +8938,26 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       {/* Bottom Action Area */}
       {
         !showMoveSelection && !showItemSelection ? (
-          <div className="shrink-0 bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6 pb-6 sm:pb-8">
+          <div className="shrink-0 bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/80 backdrop-blur-md border-t border-slate-700/40 p-4 sm:p-6 pb-6 sm:pb-8 relative">
+            {isMultiplayer && !canTakeAction() ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-950/90 backdrop-blur-sm rounded-t-2xl z-50">
+                <div className="text-center text-slate-300">
+                  <p className="text-sm uppercase tracking-widest font-bold">⏳ {currentActiveTurn === 'host' ? 'Host' : currentActiveTurn === 'guest' ? 'Guest' : 'Enemies'} Turn</p>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {currentActiveTurn === 'enemies'
+                      ? 'Enemies are taking their actions...'
+                      : `Waiting for ${currentActiveTurn === 'host' ? 'host' : 'guest'} to act...`}
+                  </p>
+                </div>
+              </div>
+            ) : null}
 
             <HeroActionPanel
-              isPlayerTurn={isPlayerTurn}
-              onFight={handleFight}
-              onUseItem={handleUseItem}
-              onTrain={handleTrain}
-              onBlock={handleBlock}
+              isPlayerTurn={isPlayerTurn && canTakeAction()}
+              onFight={canTakeAction() ? handleFight : () => {}}
+              onUseItem={canTakeAction() ? handleUseItem : () => {}}
+              onTrain={canTakeAction() ? handleTrain : () => {}}
+              onBlock={canTakeAction() ? handleBlock : () => {}}
               blockCooldownTurns={blockCooldownTurns}
               playerAttack={playerAttack}
               attackCap={attackCap}
@@ -8128,7 +8966,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         ) : showMoveSelection ? (
           <MoveSelection
             moves={characterMoves}
-            onSelectMove={handleMoveSelect}
+            onSelectMove={canTakeAction() ? handleMoveSelect : () => {}}
             onClose={() => setShowMoveSelection(false)}
             currentResource={playerResource}
             resourceType={resourceType as 'Mana' | 'Energy'}
@@ -8141,7 +8979,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         ) : (
           <ItemSelection
             inventory={inventory}
-            onUseItem={handleItemSelect}
+            onUseItem={canTakeAction() ? handleItemSelect : () => {}}
             onClose={() => setShowItemSelection(false)}
             currentHealth={playerHealth}
             maxHealth={maxPlayerHealth}

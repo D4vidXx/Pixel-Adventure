@@ -14,6 +14,8 @@ import { PATCH_NOTES } from '../data/patch-notes';
 
 interface MainMenuProps {
   onPlay: () => void;
+  onCoop: () => void;
+  onEvents: () => void;
   onSettings: () => void;
   onShop: () => void;
   onBackgroundShop: () => void;
@@ -30,6 +32,8 @@ interface MainMenuProps {
 
 export function MainMenu({
   onPlay,
+  onCoop,
+  onEvents,
   onSettings,
   onShop,
   onBackgroundShop,
@@ -401,21 +405,50 @@ export function MainMenu({
             </div>
 
             {/* Primary Action: Enter Dungeon */}
+            <div className="flex gap-2 w-full">
+              <motion.button
+                whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(220, 38, 38, 0.4)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onPlay}
+                className="flex-1 py-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white border border-red-400/50 rounded-xl transition-all duration-300 shadow-lg shadow-red-900/50 group relative overflow-hidden text-center"
+              >
+                <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent,rgba(255,255,255,0.2),transparent)] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                <div className="flex items-center justify-center gap-2">
+                  <Play className="w-5 h-5 fill-current shrink-0" />
+                  <span className="text-sm font-black tracking-wider uppercase whitespace-nowrap">Solo Run</span>
+                </div>
+              </motion.button>
+
+              <motion.button
+                whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(37, 99, 235, 0.4)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={onCoop}
+                className="flex-1 py-5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white border border-blue-400/50 rounded-xl transition-all duration-300 shadow-lg shadow-blue-900/50 group relative overflow-hidden text-center"
+              >
+                <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent,rgba(255,255,255,0.2),transparent)] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                <div className="flex items-center justify-center gap-2">
+                  <Swords className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-black tracking-wider uppercase whitespace-nowrap">Co-op Run</span>
+                </div>
+              </motion.button>
+            </div>
+
+            {/* Events Button */}
             <motion.button
-              whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(220, 38, 38, 0.4)" }}
+              whileHover={{ scale: 1.02, boxShadow: "0 0 30px rgba(168, 85, 247, 0.4)" }}
               whileTap={{ scale: 0.98 }}
-              onClick={onPlay}
-              className="w-full py-5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white border border-red-400/50 rounded-xl transition-all duration-300 shadow-lg shadow-red-900/50 group relative overflow-hidden"
+              onClick={onEvents}
+              className="w-full py-4 mt-3 bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white border border-purple-400/50 rounded-xl transition-all duration-300 shadow-lg shadow-purple-900/50 group relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent,rgba(255,255,255,0.2),transparent)] translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               <div className="flex items-center justify-center gap-3">
-                <Play className="w-6 h-6 fill-current" />
-                <span className="text-lg font-black tracking-widest uppercase">Start Run</span>
+                <Swords className="w-5 h-5" />
+                <span className="text-md font-black tracking-widest uppercase">Events</span>
               </div>
             </motion.button>
 
             {/* Secondary Actions: Grid */}
-            <div className="grid grid-cols-2 gap-3 mt-1">
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <motion.button
                 whileHover={{ scale: 1.02, backgroundColor: "rgba(6, 182, 212, 0.15)" }}
                 whileTap={{ scale: 0.98 }}
@@ -457,10 +490,10 @@ export function MainMenu({
             </motion.button>
           </motion.div>
         </div>
-      </motion.div>
+      </motion.div >
 
       {/* Bottom Dock for Extras */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+      < div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20" >
         <div className="flex items-center gap-4 px-6 py-3 bg-slate-950/60 backdrop-blur-md border border-white/10 rounded-full shadow-2xl">
           <motion.button
             whileHover={{ scale: 1.1, y: -2 }}
@@ -524,12 +557,12 @@ export function MainMenu({
             <span className="text-[9px] uppercase font-bold text-slate-500 group-hover:text-purple-200">Sleep</span>
           </motion.button>
         </div>
-      </div>
+      </div >
 
       <AnimatePresence>
         {showPatchNotes && <PatchNotesModal onClose={() => setShowPatchNotes(false)} />}
       </AnimatePresence>
-    </div>
+    </div >
   );
 }
 

@@ -1340,8 +1340,47 @@ export const ELF_MINION: Enemy = {
   baseDamage: 20,
 };
 
+export const EVENT_GOBLIN_AMBUSH: Record<number, LevelData> = {
+  1: {
+    enemies: [
+      { id: 'goblin_scout_1', name: 'Goblin Scout', type: 'ENEMY', maxHealth: 60, attack: 9, defense: 9, baseDamage: 12 },
+      { id: 'goblin_scout_2', name: 'Goblin Scout', type: 'ENEMY', maxHealth: 60, attack: 9, defense: 9, baseDamage: 12 },
+      { id: 'goblin_scout_3', name: 'Goblin Scout', type: 'ENEMY', maxHealth: 60, attack: 9, defense: 9, baseDamage: 12 },
+    ]
+  },
+  2: {
+    enemies: [
+      { id: 'goblin_warrior_1', name: 'Goblin Warrior', type: 'ENEMY', maxHealth: 70, attack: 13, defense: 12, baseDamage: 14 },
+      { id: 'goblin_warrior_2', name: 'Goblin Warrior', type: 'ENEMY', maxHealth: 70, attack: 13, defense: 12, baseDamage: 14 },
+      { id: 'goblin_scout_1', name: 'Goblin Scout', type: 'ENEMY', maxHealth: 60, attack: 9, defense: 9, baseDamage: 12 },
+    ]
+  },
+  3: {
+    enemies: [
+      { id: 'goblin_sorcerer', name: 'Goblin Sorcerer', type: 'ENEMY', maxHealth: 300, attack: 50, defense: 80, baseDamage: 25, traitId: 'goblin_summoner', traitDescription: 'Spawns a Goblin Warrior or Goblin Archer every other turn.' },
+      { id: 'goblin_warrior_1', name: 'Goblin Warrior', type: 'ENEMY', maxHealth: 70, attack: 13, defense: 12, baseDamage: 14 },
+      { id: 'goblin_archer_1', name: 'Goblin Archer', type: 'ENEMY', maxHealth: 50, attack: 15, defense: 8, baseDamage: 16 },
+    ]
+  },
+  4: {
+    enemies: [
+      { id: 'goblin_sorcerer', name: 'Goblin Sorcerer', type: 'ENEMY', maxHealth: 300, attack: 50, defense: 80, baseDamage: 25, traitId: 'goblin_summoner', traitDescription: 'Spawns a Goblin Warrior or Goblin Archer every other turn.' },
+      { id: 'goblin_archer_1', name: 'Goblin Archer', type: 'ENEMY', maxHealth: 50, attack: 15, defense: 8, baseDamage: 16 },
+      { id: 'goblin_archer_2', name: 'Goblin Archer', type: 'ENEMY', maxHealth: 50, attack: 15, defense: 8, baseDamage: 16 },
+    ]
+  },
+  5: {
+    enemies: [
+      { id: 'boss_king', name: 'Goblin King', type: 'BOSS', maxHealth: 250, attack: 27, defense: 84, baseDamage: 30 },
+      { id: 'boss_queen', name: 'Goblin Queen', type: 'BOSS', maxHealth: 200, attack: 30, defense: 60, baseDamage: 20, traitId: 'goblin_queen_debuffs', traitDescription: 'Can inflict Vulnerable (+20% damage taken) and Weakness (-20% attack).' },
+    ]
+  }
+};
+
 // Get emoji for enemy type
 export function getEnemyEmoji(enemyName: string): string {
+  if (enemyName.includes('Goblin Queen')) return '👑';
+  if (enemyName.includes('Goblin Sorcerer')) return '🧙‍♂️';
   if (enemyName.includes('Goblin')) return '👺';
   if (enemyName.includes('Orc')) return '🧟';
   if (enemyName.includes('Skeleton')) return '💀';
