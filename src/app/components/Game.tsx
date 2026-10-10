@@ -199,6 +199,12 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   }, [isGameHost, multiplayerOn]);
 
   // Helper: Check if current player can take an action in multiplayer
+  const getNextCoopTurn = useCallback((phase: CoopTurnPhase): CoopTurnPhase => {
+    if (phase === 'host') return 'guest';
+    if (phase === 'guest') return 'enemies';
+    return 'host';
+  }, []);
+
   const canTakeAction = useCallback(() => {
     if (!isMultiplayer) return true;
     // In multiplayer, only allow actions if it's this player's turn
@@ -207,18 +213,19 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const setCoopTurnPhase = useCallback((nextTurn: CoopTurnPhase) => {
     setCurrentActiveTurn(nextTurn);
+    setIsPlayerTurn(nextTurn === localCoopRole);
     if (multiplayerSend) {
       multiplayerSend('turn_switch', { currentActiveTurn: nextTurn });
       console.log('[Co-op] Broadcasting turn switch to:', nextTurn);
     }
-  }, [multiplayerSend]);
+  }, [multiplayerSend, localCoopRole]);
 
-  // Helper: Switch turn to the other player in multiplayer and broadcast it
+  // Helper: Advance the co-op turn order in the correct sequence: host -> guest -> enemies -> host
   const switchTurn = useCallback(() => {
     if (!isMultiplayer) return;
-    const nextTurn: CoopTurnPhase = currentActiveTurn === 'host' ? 'guest' : 'host';
+    const nextTurn = getNextCoopTurn(currentActiveTurn);
     setCoopTurnPhase(nextTurn);
-  }, [isMultiplayer, currentActiveTurn, setCoopTurnPhase]);
+  }, [isMultiplayer, currentActiveTurn, getNextCoopTurn, setCoopTurnPhase]);
 
   const getStyleImage = () => {
     switch (activeStyleId) {
@@ -3501,18 +3508,18 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       return;
     }
 
-    if (currentActiveTurn === 'host') {
-      setCoopTurnPhase('guest');
-      setIsPlayerTurn(localCoopRole === 'guest');
-      addLog('Co-op turn: Guest is up.');
+    const nextTurn = getNextCoopTurn(currentActiveTurn);
+    setCoopTurnPhase(nextTurn);
+    setIsPlayerTurn(nextTurn === localCoopRole);
+
+    if (nextTurn === 'enemies') {
+      addLog('Co-op turn: Enemies are up.');
+      runEnemyTurn(enemiesSnapshot, blockingThisTurn, extraDamageThisTurn);
       return;
     }
 
-    setCoopTurnPhase('enemies');
-    setIsPlayerTurn(false);
-    addLog('Co-op turn: Enemies are up.');
-    runEnemyTurn(enemiesSnapshot, blockingThisTurn, extraDamageThisTurn);
-  }, [isMultiplayer, currentActiveTurn, localCoopRole, setCoopTurnPhase, enemiesRef]);
+    addLog(`Co-op turn: ${nextTurn === 'host' ? 'Player 1' : 'Player 2'} is up.`);
+  }, [isMultiplayer, currentActiveTurn, getNextCoopTurn, localCoopRole, setCoopTurnPhase]);
 
   const advanceCoopTurnOrRunEnemies = enemyTurn;
 
@@ -4145,41 +4152,41 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
   const broadcastPlayerAction = useCallback((moveId: string, targetId: string | null, updatedEnemiesList: any[], latestLog: string) => {
     if (!isMultiplayer || !multiplayerSend) return;
-    
-    // Broadcast player's move action to the other player
+
+    const nextTurn = getNextCoopTurn(currentActiveTurn);
     const actionPayload = {
       moveId,
       targetId,
       updatedEnemies: updatedEnemiesList,
-      currentActiveTurn: currentActiveTurn === 'host' ? 'guest' : 'host',
+      currentActiveTurn: nextTurn,
       combatLog: latestLog,
       playerRole: isGameHost ? 'host' : 'guest',
       timestamp: Date.now(),
     };
-    
+
     multiplayerSend('player_action', actionPayload);
     console.log('[Co-op] Broadcasting player action:', actionPayload);
-  }, [isMultiplayer, multiplayerSend, currentActiveTurn, isGameHost]);
+  }, [isMultiplayer, multiplayerSend, currentActiveTurn, getNextCoopTurn, isGameHost]);
 
   // Wrapper for setEnemies that automatically broadcasts in multiplayer
   const setEnemiesAndBroadcast = useCallback((updatedEnemies: any[], actionDescription: string = 'attack') => {
     setEnemies(updatedEnemies);
-    
+
     // Broadcast the updated enemy state to the other player
     if (isMultiplayer && multiplayerSend) {
       const actionPayload = {
         moveId: actionDescription,
         targetId: selectedTargetId,
         updatedEnemies,
-        currentActiveTurn,
+        currentActiveTurn: getNextCoopTurn(currentActiveTurn),
         playerRole: isGameHost ? 'host' : 'guest',
         timestamp: Date.now(),
       };
-      
+
       multiplayerSend('player_action', actionPayload);
       console.log('[Co-op] Broadcasting enemy update:', actionPayload);
     }
-  }, [isMultiplayer, multiplayerSend, selectedTargetId, currentActiveTurn, isGameHost]);
+  }, [isMultiplayer, multiplayerSend, selectedTargetId, currentActiveTurn, getNextCoopTurn, isGameHost]);
 
   const endPlayerTurn = (m: Move) => {
     decrementCooldowns();
