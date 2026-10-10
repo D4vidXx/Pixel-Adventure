@@ -131,13 +131,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
   
   // Player stats (base values, equipment bonuses applied via useEffect)
-  const [playerHealth, setPlayerHealth] = useState(hero.stats.health);
-  const [playerAttack, setPlayerAttack] = useState(hero.stats.attack);
-  const [playerDefense, setPlayerDefense] = useState(hero.stats.defense);
-  const [playerResource, setPlayerResource] = useState(() => getCoopHeroStartingResource(hero, equippedItems));
-  const [remotePlayerHealth, setRemotePlayerHealth] = useState(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
-  const [remoteMaxPlayerHealth, setRemoteMaxPlayerHealth] = useState(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
-  const [remotePlayerResource, setRemotePlayerResource] = useState(() => getCoopHeroStartingResource(remoteHero, remoteEquippedItems));
+  const [playerHealth, setPlayerHealth] = useState<number>(hero.stats.health);
+  const [playerAttack, setPlayerAttack] = useState<number>(hero.stats.attack);
+  const [playerDefense, setPlayerDefense] = useState<number>(hero.stats.defense);
+  const [playerResource, setPlayerResource] = useState<number>(() => getCoopHeroStartingResource(hero, equippedItems));
+  const [remotePlayerHealth, setRemotePlayerHealth] = useState<number>(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+  const [remoteMaxPlayerHealth, setRemoteMaxPlayerHealth] = useState<number>(() => getCoopHeroMaxHealth(remoteHero, remoteEquippedItems));
+  const [remotePlayerResource, setRemotePlayerResource] = useState<number>(() => getCoopHeroStartingResource(remoteHero, remoteEquippedItems));
   const [remotePlayerAttack, setRemotePlayerAttack] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).attack);
   const [remotePlayerDefense, setRemotePlayerDefense] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).defense);
   const [remotePlayerSpeed, setRemotePlayerSpeed] = useState(() => getCoopHeroDisplayStats(remoteHero, remoteEquippedItems).speed);
@@ -1018,7 +1018,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (isRed) {
       addLog(`🔥 MOMENTUM! Stamina refunded and Rear Cross ready for another strike!`);
       // Refund stamina
-      setPlayerResource(prev => Math.min(maxPlayerResource, prev + 25));
+      setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + 25));
       // Refund usage (decrement current usage count)
       setMoveUsesThisTurn(prev => ({ ...prev, cecil_rear_cross: Math.max(0, (prev.cecil_rear_cross || 0) - 1) }));
       // Double the multiplier for the next red hit
@@ -1522,7 +1522,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Grant level bonuses
     const resourceBonus = Math.floor(maxPlayerResource / 4);
-    setPlayerResource(prev => Math.min(maxPlayerResource, prev + resourceBonus));
+    setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + resourceBonus));
 
     const healthBonus = Math.floor(maxPlayerHealth / 8);
     const healAmount = calculateHeal(healthBonus);
@@ -3364,7 +3364,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     // Restore resource
-    setPlayerResource((prev) => {
+    setPlayerResource((prev: number) => {
       if (hero.classId === 'gunslinger') {
         let gain = 1;
         // Johnny Passive: Gain an extra bullet every turn
@@ -3400,7 +3400,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (hero.uniqueAbility?.id === 'regeneration') {
       const regenAmount = Math.floor(maxPlayerResource * 0.1);
       if (regenAmount > 0) {
-        setPlayerResource(prev => Math.min(maxPlayerResource, prev + regenAmount));
+        setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + regenAmount));
         addLog(`🩹 Regeneration restores ${regenAmount} resource!`);
       }
     }
@@ -3599,7 +3599,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       setTimeout(() => {
         // Consume Bullet
-        setPlayerResource(prev => Math.max(0, prev - 1));
+        setPlayerResource((prev: number) => Math.max(0, prev - 1));
 
         // Update Bullets Spent & Check Crit (SIX-ROUND ONLY)
         localBulletsSpent++;
@@ -3738,7 +3738,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
 
       setTimeout(() => {
-        setPlayerResource(prev => Math.max(0, prev - 1));
+        setPlayerResource((prev: number) => Math.max(0, prev - 1));
 
         localBulletsSpent++;
         setBulletsSpent(prev => prev + 1);
@@ -3932,7 +3932,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       setTimeout(() => {
         // Consume Bullet
-        setPlayerResource(prev => Math.max(0, prev - 1));
+        setPlayerResource((prev: number) => Math.max(0, prev - 1));
 
         // Update Bullets Spent & Check Crit
         localBulletsSpent++;
@@ -4052,7 +4052,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (win) {
       addLog(`🎲 RPS: VICTORY! Full meter and critical strike!`);
       setDualityMeter(4);
-      setPlayerResource(prev => Math.max(0, prev - move.cost));
+      setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       const target = enemies.find(e => e.id === selectedTargetId);
       if (target) {
         let damage = calculateCritDamage(move.baseDamage || 30, attackToUse, target);
@@ -4065,13 +4065,13 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
     } else if (userChoice === botChoice) {
       addLog(`🎲 RPS: DRAW! Nothing happens.`);
-      setPlayerResource(prev => Math.max(0, prev - move.cost));
+      setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       endPlayerTurn(move);
     } else {
       const penaltyText = "DEFEAT!";
       addLog(`🎲 RPS: ${penaltyText} Cedric takes double damage next turn.`);
       setTakeExtraDamageNextTurn(true);
-      setPlayerResource(prev => Math.max(0, prev - move.cost));
+      setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       endPlayerTurn(move);
     }
     setRpsPendingMove(null);
@@ -4285,7 +4285,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     if (!resourceRefunded && move.id !== 'training' && move.id !== 'six_round' && move.id !== 'soul_shot' && move.id !== 'bullet_storm' && move.id !== 'spare_bullet' && move.id !== 'reload_move') {
-      setPlayerResource(prev => Math.max(0, prev - move.cost));
+      setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
     }
 
     // Check if player has enough resource
@@ -4313,7 +4313,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
       // Training cost is custom, so we keep it here or handle it specifically. Wait, training is a special case.
       // This is a special case where the cost is fixed and not 'move.cost', so it's not redundant with the unified block.
-      setPlayerResource(prev => Math.max(0, prev - trainCost));
+      setPlayerResource((prev: number) => Math.max(0, prev - trainCost));
       addLog(`💪 Training complete! Gained experience.`);
       endPlayerTurn(move);
       return;
@@ -4415,7 +4415,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     // Wolfgang Passive & Move Logic
     if (hero.id === 'wolfgang') {
       if (move.id === 'on_beat') {
-        setPlayerResource(prev => Math.min(maxPlayerResource, prev + 10));
+        setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + 10));
         setDualityMeter(prev => Math.min(4, prev + 1)); // Add Rhythm Flow stack
         addLog(`🎵 On-Beat! Restored 10 Energy & Gained 1 Rhythm Flow!`);
       } else if (move.id === 'conductor') {
@@ -4524,7 +4524,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (move.id === 'reload_move') {
       const reloadAmt = 4;
       // Resource cost (0) is already handled by unified block above if it ever has one
-      setPlayerResource(prev => Math.min(8, prev + reloadAmt));
+      setPlayerResource((prev: number) => Math.min(8, prev + reloadAmt));
       addLog(`🔫 Reloading! +${reloadAmt} Bullets! Turn ends.`);
       decrementCooldowns();
       setIsPlayerTurn(false);
@@ -4911,7 +4911,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       const healAmt = 15;
       const energyAmt = 30;
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
-      setPlayerResource(prev => Math.min(maxPlayerResource, prev + energyAmt));
+      setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + energyAmt));
       addLog(`🥤 Energy Drink! +${healAmt} HP and +${energyAmt} Energy!`);
       decrementCooldowns();
       setIsPlayerTurn(false);
@@ -5240,7 +5240,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           return;
         }
 
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+        if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
 
         const critRoll = rollD20(true);
         const darkPactCrit = hero.uniqueAbility?.id === 'dark_pact' && playerResource >= 100;
@@ -5313,7 +5313,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
           addLog(`❌ Not enough ${resourceType}! Need ${move.cost}, have ${playerResource}.`);
           return;
         }
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+        if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
 
         const baseDamagePerTurn = 16; // 80 / 5
         const totalTurns = 5;
@@ -5392,7 +5392,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       // Special handling for Spare Bullet (Gunslinger)
       if (move.id === 'spare_bullet') {
         const bulletsToReload = 1;
-        setPlayerResource(prev => Math.min(maxPlayerResource, prev + bulletsToReload));
+        setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + bulletsToReload));
         setGuaranteedCrit(true);
         addLog(`💀 Spare Bullet! Reloaded 1 Critical Bullet!`);
         decrementCooldowns();
@@ -5808,7 +5808,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
       // --- Roll & Slip: handle before general attack so baseDamage=0 doesn't do min damage ---
       if (move.id === 'roll_and_slip') {
-        if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+        if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
         const rsTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === effectiveTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
         if (rsTarget) {
           const rsDamage = Math.floor(20 * (1 + playerAttack * 0.02));
@@ -6151,7 +6151,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setIsPlayerTurn(true);
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       setPermanentUpgrades(prev => {
         const cap = getStatCap();
         const currentAtk = playerAttack + prev.attackBonus;
@@ -6189,19 +6189,19 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       }
       setBuffMoveUsageCount((prev) => prev + 1);
     } else if (move.id === 'holy_healing') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       const baseHeal = Math.floor(maxPlayerHealth * 0.5);
       const healAmt = calculateHeal(baseHeal);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       addLog(`💚 Holy Healing! Restored ${healAmt} HP! (-${move.cost} ${resourceType})`);
     } else if (move.id === 'channeling') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       setChannelingGuardActive(true);
       setChannelingAttackBuffActive(true);
       addLog('🧘 Channeling! Incoming damage halved for the next enemy turn.');
       addLog('✨ Your next attack will deal 100% more damage.');
     } else if (move.id === 'tide_call') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       const baseHeal = Math.floor(maxPlayerHealth * 0.2);
       const healAmt = calculateHeal(baseHeal);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
@@ -6228,7 +6228,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       if (hero.classId === 'brawler') setIsPlayerTurn(true);
       else endPlayerTurn(move);
     } else if (move.id === 'roll_and_slip') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       // Instant 20 damage
       const rsTarget = enemies.filter(e => e.currentHealth > 0).find(e => e.id === selectedTargetId) || enemies.filter(e => e.currentHealth > 0)[0];
       if (rsTarget) {
@@ -6251,7 +6251,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
         setIsPlayerTurn(true);
         return;
       }
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
 
       const defenseIncrease = move.defenseBoost;
       setPlayerDefense((prev) => {
@@ -6272,7 +6272,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
       setBuffMoveUsageCount((prev) => prev + 1);
       // Remove original log as it's handled inside the setter for accuracy
     } else if (move.id === 'health_tonic') {
-      if (!resourceRefunded) setPlayerResource(prev => Math.max(0, prev - move.cost));
+      if (!resourceRefunded) setPlayerResource((prev: number) => Math.max(0, prev - move.cost));
       const healAmt = calculateHeal(36);
       setPlayerHealth(prev => Math.min(maxPlayerHealth, prev + healAmt));
       addLog(`💚 You used ${move.name}! Healed for ${healAmt} HP!`);
@@ -6403,14 +6403,14 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
           if (bulletsRestore > 0) {
             const actualRestore = Math.min(bulletsRestore, maxPlayerResource - playerResource);
-            setPlayerResource(prev => Math.min(maxPlayerResource, prev + bulletsRestore));
+            setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + bulletsRestore));
             addLog(`✨ Used ${item.name}! Restored ${actualRestore} Bullets!`);
           } else {
             addLog(`❌ This item doesn't restore enough energy for a bullet!`);
           }
         } else {
           const actualRestore = Math.min(item.resourceRestore, maxPlayerResource - playerResource);
-          setPlayerResource(prev => Math.min(maxPlayerResource, prev + item.resourceRestore!));
+          setPlayerResource((prev: number) => Math.min(maxPlayerResource, prev + item.resourceRestore!));
           addLog(`✨ Used ${item.name}! Restored ${actualRestore} ${resourceType}!`);
         }
       } else if (item.type === 'buff') {
@@ -7001,7 +7001,7 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
 
     // Passive: Blue tinted glasses - +8 resource on kill
     if (!isMinion && hasEquipment('blue_tinted_glasses')) {
-      setPlayerResource(prev => {
+      setPlayerResource((prev: number) => {
         const newResource = Math.min(maxPlayerResource, prev + 8);
         if (newResource !== prev) {
           addLog(`👓 Blue Tinted Glasses grant +8 ${resourceType} for the kill!`);
