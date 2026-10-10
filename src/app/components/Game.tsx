@@ -211,12 +211,20 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     return currentActiveTurn === localCoopRole;
   }, [isMultiplayer, currentActiveTurn, localCoopRole]);
 
+  useEffect(() => {
+    if (!isMultiplayer) return;
+    setIsPlayerTurn(currentActiveTurn === localCoopRole);
+  }, [isMultiplayer, currentActiveTurn, localCoopRole]);
+
   const setCoopTurnPhase = useCallback((nextTurn: CoopTurnPhase) => {
     setCurrentActiveTurn(nextTurn);
     setIsPlayerTurn(nextTurn === localCoopRole);
     if (multiplayerSend) {
-      multiplayerSend('turn_switch', { currentActiveTurn: nextTurn });
-      console.log('[Co-op] Broadcasting turn switch to:', nextTurn);
+      multiplayerSend('turn_switch', {
+        currentActiveTurn: nextTurn,
+        sourceRole: localCoopRole,
+      });
+      console.log('[Co-op] Broadcasting turn switch from', localCoopRole, 'to:', nextTurn);
     }
   }, [multiplayerSend, localCoopRole]);
 
@@ -493,10 +501,17 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     if (!isMultiplayer || !multiplayerOn) return;
 
     const unsubscribe = multiplayerOn('turn_switch', (data: any) => {
-      console.log('[Co-op] Received turn switch:', data);
-      setCurrentActiveTurn(data.currentActiveTurn);
-      // It's our turn now if the incoming turn matches our role
-      const isMyTurn = data.currentActiveTurn === localCoopRole;
+      const sourceRole = data.sourceRole ?? (data.currentActiveTurn === 'host' ? 'host' : 'guest');
+      const incomingTurn = data.currentActiveTurn ?? sourceRole;
+
+      // Ignore self-generated stale updates so the host/guest cycle stays authoritative.
+      if (sourceRole === localCoopRole) {
+        return;
+      }
+
+      console.log('[Co-op] Received turn switch:', data, 'sourceRole:', sourceRole, 'incomingTurn:', incomingTurn);
+      setCurrentActiveTurn(incomingTurn);
+      const isMyTurn = incomingTurn === localCoopRole;
       setIsPlayerTurn(isMyTurn);
     });
 
@@ -3490,8 +3505,8 @@ export function Game({ hero, onBackToMenu, equippedItems = [], ownedItems = [], 
     }
 
     if (isMultiplayer) {
-      setCoopTurnPhase('host');
-      setIsPlayerTurn(localCoopRole === 'host');
+      const nextTurn = getNextCoopTurn(currentActiveTurn);
+      setCoopTurnPhase(nextTurn);
     } else {
       setIsPlayerTurn(true);
     }

@@ -184,88 +184,39 @@ export function CombinedHeroSelection({
         </motion.div>
 
         {isMultiplayer && (
-          <>
-            <div className="mb-4 bg-slate-900/60 border border-blue-900/40 rounded-2xl p-4 flex flex-col gap-4 backdrop-blur-md">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-4">
-                  <span className="text-xs uppercase tracking-widest text-slate-500 font-bold">Party Status:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-300">{players.length}/2 connected</span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
-                    <span className="text-xs text-slate-300 uppercase tracking-wide">Host</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.5)]" />
-                    <span className="text-xs text-slate-300 uppercase tracking-wide">Guest</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-6">
-              <div className="bg-slate-950/70 border-2 border-amber-500/30 rounded-3xl p-5 sm:p-6 min-h-[240px] shadow-lg shadow-amber-500/10">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-amber-600 font-bold">👤 You</p>
-                    <p className="text-lg sm:text-xl font-black text-amber-300">{players.find(p => p.role === role)?.name || 'You'}</p>
-                  </div>
-                  <span className={`text-[10px] uppercase font-bold px-3 py-2 rounded-full transition-all ${isReady ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
-                    {isReady ? '✓ Ready' : '○ Ready?'}
-                  </span>
-                </div>
-                <div className="mb-4">
-                  <p className="text-xs text-amber-600/80 uppercase tracking-wider font-bold mb-2">Selected Hero</p>
-                  <p className="text-xl sm:text-2xl font-black text-amber-100">{selectedHero ? selectedHero.name : '⏳ Choosing...'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-amber-600/80 uppercase tracking-wider font-bold mb-3">Equipped Items</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedHero && equippedItems.length > 0 ? equippedItems.map(itemId => (
-                      <div key={itemId} className="text-[11px] text-amber-200 bg-amber-900/30 px-3 py-1.5 rounded-full border border-amber-600/30 font-semibold">
-                        ⚔️ {getEquipmentItem(itemId)?.name}
-                      </div>
-                    )) : (
-                      <span className="text-xs text-amber-600/60 italic">No items equipped</span>
-                    )}
-                  </div>
-                </div>
+          <div className="mb-4 flex justify-start">
+            <div className="w-full max-w-[220px] rounded-2xl border border-slate-700/60 bg-slate-950/70 p-3 backdrop-blur-md shadow-lg shadow-slate-950/40">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-700/60 pb-2">
+                <span className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-bold">Party</span>
+                <span className="text-[10px] text-slate-300">{players.length}/2</span>
               </div>
 
-              <div className={`rounded-3xl p-5 sm:p-6 min-h-[240px] shadow-lg transition-all ${remoteHero ? 'bg-slate-950/70 border-2 border-blue-500/30 shadow-blue-500/10' : 'bg-slate-900/40 border-2 border-slate-700/30'}`}>
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-blue-600/80 font-bold">👥 Partner</p>
-                    <p className="text-lg sm:text-xl font-black text-slate-100">{players.find(p => p.role !== role)?.name || 'Waiting...'}</p>
-                  </div>
-                  <span className={`text-[10px] uppercase font-bold px-3 py-2 rounded-full transition-all ${remoteReady ? 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20' : 'bg-slate-700/50 text-slate-400 border border-slate-600/50'}`}>
-                    {remoteReady ? '✓ Ready' : '○ Ready?'}
-                  </span>
-                </div>
-                <div className="mb-4">
-                  <p className="text-xs text-slate-500/80 uppercase tracking-wider font-bold mb-2">Selected Hero</p>
-                  <p className="text-xl sm:text-2xl font-black text-blue-200 min-h-[32px] flex items-center">{remoteHero ? remoteHero.name : '⏳ Choosing...'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500/80 uppercase tracking-wider font-bold mb-3">Equipped Items</p>
-                  <div className="flex flex-wrap gap-2 min-h-[32px]">
-                    {remoteHero && remoteEquippedItems && remoteEquippedItems.length > 0 ? remoteEquippedItems.map(itemId => (
-                      <div key={itemId} className="text-[11px] text-blue-200 bg-blue-900/30 px-3 py-1.5 rounded-full border border-blue-600/30 font-semibold">
-                        ⚔️ {getEquipmentItem(itemId)?.name}
+              <div className="space-y-2">
+                {(['host', 'guest'] as const).map((slot) => {
+                  const player = players.find(p => p.role === slot);
+                  const isLocal = slot === role;
+                  const isSlotReady = slot === 'host' ? isReady : remoteReady;
+
+                  return (
+                    <div
+                      key={slot}
+                      className={`rounded-xl border p-2 ${isLocal ? 'border-amber-500/40 bg-amber-500/10' : 'border-blue-500/30 bg-blue-500/10'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[9px] uppercase tracking-[0.2em] text-slate-400 font-bold">{slot === 'host' ? 'Host' : 'Guest'}</p>
+                          <p className="truncate text-[11px] font-bold text-slate-200">{player?.name || 'Waiting...'}</p>
+                        </div>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[8px] font-bold uppercase ${isSlotReady ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-700/60 text-slate-400 border border-slate-600/50'}`}>
+                          {isSlotReady ? 'Ready' : 'Waiting'}
+                        </span>
                       </div>
-                    )) : remoteHero ? (
-                      <span className="text-xs text-slate-600/60 italic">No items equipped</span>
-                    ) : (
-                      <span className="text-xs text-slate-600/60 italic">Awaiting selection...</span>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </>
+          </div>
         )}
 
         {/* Main Content Area */}

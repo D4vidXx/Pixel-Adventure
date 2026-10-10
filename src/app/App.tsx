@@ -446,6 +446,7 @@ export default function App() {
 
   const activeBackground = getBackgroundById(activeBackgroundId) ?? BACKGROUND_OPTIONS[0];
   const showGlobalBackgroundEffects = gameState !== 'playing';
+  const activeGameHero = selectedHero ?? remoteHero ?? null;
 
   const handleClaimGift = (styleId: string) => {
     if (!ownedStyles.includes(styleId)) {
@@ -559,9 +560,9 @@ export default function App() {
           onStartGame={handleStartGameMP}
         />
       )}
-      {gameState === 'playing' && (selectedHero || (isMultiplayer && remoteHero)) && (
+      {gameState === 'playing' && activeGameHero && (
         <Game
-          hero={selectedHero || remoteHero}
+          hero={activeGameHero!}
           onBackToMenu={handleBackToMenu}
           equippedItems={equippedItems}
           ownedItems={ownedItems}

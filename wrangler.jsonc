@@ -1,5 +1,5 @@
 {
-  "name": "main-menu-screen",
+  "name": "pixel-adventure",
   "main": "src/worker.ts",
   "compatibility_date": "2026-02-19",
   "assets": {
@@ -16,7 +16,7 @@
   "migrations": [
     {
       "tag": "v1",
-      "new_classes": ["GameRoom"]
+      "new_sqlite_classes": ["GameRoom"]
     }
   ]
 }
